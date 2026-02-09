@@ -38,30 +38,12 @@
         {% endif %}
     </div>
 
-    {# Show description preview after template field #}
-    {% if selected_template %}
+    {% if selected_template.description %}
     <div class="description-preview">
-        <label>Parent task description:</label>
-
-        {% if sync_settings.description or selected_template.description %}
+        <label>Template description:</label>
         <div class="description-content">
-            {% if sync_settings.description %}
-            <div class="description-section">
-                <strong>Settings:</strong>
-                <p class="description-text">{{ sync_settings.description }}</p>
-            </div>
-            {% endif %}
-
-            {% if selected_template.description %}
-            <div class="description-section">
-                <strong>Template:</strong>
-                <p class="description-text">{{ selected_template.description }}</p>
-            </div>
-            {% endif %}
+            <p class="description-text">{{ selected_template.description }}</p>
         </div>
-        {% else %}
-        <p class="help-text">No description configured in settings or template.</p>
-        {% endif %}
     </div>
     {% endif %}
 

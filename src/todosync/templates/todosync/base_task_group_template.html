@@ -5,13 +5,13 @@
 <div class="task-group-template">
     <h1>{{ page.title }}</h1>
 
-    {% if settings.todosync.TaskSyncSettings.tokens %}
+    {% if token_field_names %}
     <section class="tokens-section">
         <h2>Tokens</h2>
-        <p class="help-text">The following tokens can be used in task titles (configured in site settings):</p>
+        <p class="help-text">The following fields are used as tokens in task titles:</p>
         <ul class="token-list">
-            {% for token in settings.todosync.TaskSyncSettings.get_token_list %}
-            <li><code>{​{ {{ token }} }​}</code></li>
+            {% for field_name in token_field_names %}
+            <li><code>{{ field_name }}</code></li>
             {% endfor %}
         </ul>
     </section>

@@ -1,21 +1,20 @@
+import sys
+
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.conf import settings
 from todoist_api_python.api import TodoistAPI
 from wagtail.models import Site
 
-from .models import BaseTaskGroupTemplate, TaskSyncSettings, TaskGroup
+from .models import BaseTaskGroupTemplate, Task, SubTask
 from .forms import BaseTaskGroupCreationForm
 from .utils import substitute_tokens
-import sys
 
 
 def create_task_group(request):
     """View for creating task groups from templates"""
 
     template_id = request.GET.get('template_id') or request.POST.get('template_id')
-
-    # Get the site for accessing settings
     site = Site.find_for_request(request)
 
     if request.method == 'POST':
@@ -26,40 +25,44 @@ def create_task_group(request):
             token_values = form.get_token_values()
             form_description = form.cleaned_data.get('description', '')
 
-            # Check debug mode from Django settings
             debug_mode = getattr(settings, 'DEBUG_TASK_CREATION', False)
 
-            # Create tasks via Todoist API or debug print
             try:
                 if debug_mode:
-                    # Debug mode: print to console instead of posting
-                    created_tasks = create_tasks_from_template(None, template, token_values, site, form_description, debug=True)
-                    messages.success(request, f'DEBUG MODE: Printed {len(created_tasks)} tasks to console')
+                    result = create_tasks_from_template(
+                        None, template, token_values, site, form_description, debug=True
+                    )
+                    messages.success(
+                        request,
+                        f'DEBUG MODE: Printed {result["task_count"]} tasks to console'
+                    )
                 else:
-                    # Normal mode: post to Todoist API
                     api_token = getattr(settings, 'TODOIST_API_TOKEN', None)
                     if not api_token:
                         messages.error(request, 'Todoist API token not configured')
                         return redirect('todosync:create_task_group')
 
                     api = TodoistAPI(api_token)
-                    created_tasks = create_tasks_from_template(api, template, token_values, site, form_description, debug=False)
-                    messages.success(request, f'Successfully created {len(created_tasks)} tasks')
+                    result = create_tasks_from_template(
+                        api, template, token_values, site, form_description, debug=False
+                    )
+                    messages.success(
+                        request,
+                        f'Successfully created {result["task_count"]} tasks'
+                    )
 
                 return redirect('todosync:create_task_group')
 
             except Exception as e:
                 error_message = str(e)
 
-                # Provide more helpful error messages for common issues
                 if '400 Client Error: Bad Request' in error_message:
-                    sync_settings = TaskSyncSettings.for_site(site)
-                    if sync_settings.todoist_project_id:
+                    project_id = template.get_effective_project_id(site)
+                    if project_id:
                         messages.error(
                             request,
-                            f'Invalid Todoist project ID: "{sync_settings.todoist_project_id}". '
-                            'Please run "python manage.py list_todoist_projects" to see valid project IDs, '
-                            'then update the project ID in Settings → Task Sync Settings.'
+                            f'Invalid Todoist project ID: "{project_id}". '
+                            'Please run "python manage.py list_todoist_projects" to see valid project IDs.'
                         )
                     else:
                         messages.error(
@@ -82,7 +85,6 @@ def create_task_group(request):
     else:
         form = BaseTaskGroupCreationForm(template_id=template_id, site=site)
 
-    # Get the selected template for displaying task structure
     selected_template = None
     if template_id:
         try:
@@ -90,199 +92,203 @@ def create_task_group(request):
         except BaseTaskGroupTemplate.DoesNotExist:
             pass
 
-    # Get sync settings for displaying descriptions
-    sync_settings = TaskSyncSettings.for_site(site)
-
     return render(request, 'todosync/create_task_group.html', {
         'form': form,
         'template_id': template_id,
         'selected_template': selected_template,
-        'sync_settings': sync_settings,
     })
 
 
 def create_tasks_from_template(api, template, token_values, site, form_description='', debug=False):
-    """Create Todoist tasks from template with token substitution
+    """Create Todoist tasks from template and persist tracking records.
 
     Args:
         api: TodoistAPI instance (can be None if debug=True)
         template: BaseTaskGroupTemplate instance
-        token_values: Dict of token replacements
+        token_values: Dict of token replacements (field_name -> value)
         site: Wagtail Site instance for accessing settings
         form_description: Optional description from the creation form
         debug: If True, print debug info instead of posting to API
-    """
-    created_tasks = []
 
+    Returns:
+        Dict with 'parent_task_instance' and 'task_count'.
+    """
     if debug:
-        print("\n" + "="*80, file=sys.stderr)
+        print("\n" + "=" * 80, file=sys.stderr)
         print(f"DEBUG: Creating tasks from template: {template.title}", file=sys.stderr)
         print(f"DEBUG: Token values: {token_values}", file=sys.stderr)
-        print("="*80 + "\n", file=sys.stderr)
+        print("=" * 80 + "\n", file=sys.stderr)
 
-    # Get parent task title from settings, or use template title as fallback
-    sync_settings = TaskSyncSettings.for_site(site)
-    if sync_settings.parent_task_title:
-        parent_title = sync_settings.parent_task_title
-    else:
-        parent_title = template.title
+    # Create the parent task model instance
+    parent_task_model = template.get_parent_task_model()
+    if not parent_task_model:
+        raise ValueError("Template has no task_type configured")
 
-    # Substitute tokens in parent title
-    parent_title = substitute_tokens(parent_title, token_values)
+    instance_kwargs = {'template': template}
+    for field_name in parent_task_model.get_token_field_names():
+        if field_name in token_values:
+            instance_kwargs[field_name] = token_values[field_name]
 
-    # Build parent task description from settings, template, and form descriptions
+    parent_task_instance = parent_task_model(**instance_kwargs)
+
+    # Get title and description from the instance
+    parent_title = parent_task_instance.get_parent_task_title()
+
+    # Build description from instance + template + form
     description_parts = []
-
-    # Add site-wide description first (if exists)
-    if sync_settings.description:
-        site_description = substitute_tokens(sync_settings.description, token_values)
-        description_parts.append(site_description)
-
-    # Add template description second (if exists)
+    instance_description = parent_task_instance.get_description()
+    if instance_description:
+        description_parts.append(instance_description)
     if template.description:
         template_description = substitute_tokens(template.description, token_values)
         description_parts.append(template_description)
-
-    # Add form description third (if exists)
     if form_description:
         form_desc = substitute_tokens(form_description, token_values)
         description_parts.append(form_desc)
 
-    # Combine descriptions with double newline separator
     parent_description = '\n\n'.join(description_parts) if description_parts else ''
 
-    # Create parent task from template page
-    task_params = {
-        'content': parent_title,
-    }
-
-    # Only add description if there is one
+    # Build Todoist task params
+    task_params = {'content': parent_title}
     if parent_description:
         task_params['description'] = parent_description
 
-    # Add project_id if specified in settings
-    if sync_settings.todoist_project_id:
-        task_params['project_id'] = sync_settings.todoist_project_id
+    project_id = template.get_effective_project_id(site)
+    if project_id:
+        task_params['project_id'] = project_id
+
+    task_count = 0
 
     if debug:
-        # Debug mode: print parent task info
+        import random
         print(f"Parent Task: {parent_title}", file=sys.stderr)
         if parent_description:
             print(f"  Description: {parent_description}", file=sys.stderr)
-        if sync_settings.todoist_project_id:
-            print(f"  Project ID: {sync_settings.todoist_project_id}", file=sys.stderr)
-
-        # Create a mock task object with just an id
-        class MockTask:
-            def __init__(self):
-                import random
-                self.id = f"debug_{random.randint(1000, 9999)}"
-
-        parent_task = MockTask()
+        if project_id:
+            print(f"  Project ID: {project_id}", file=sys.stderr)
+        todoist_parent_id = f"debug_{random.randint(1000, 9999)}"
+        task_count += 1
     else:
-        # Normal mode: create parent task via API
         try:
             print(f"DEBUG: Creating parent task with params: {task_params}", file=sys.stderr)
-            parent_task = api.add_task(**task_params)
-            print(f"DEBUG: Parent task created successfully: {parent_task.id}", file=sys.stderr)
+            todoist_parent = api.add_task(**task_params)
+            todoist_parent_id = todoist_parent.id
+            print(f"DEBUG: Parent task created successfully: {todoist_parent_id}", file=sys.stderr)
         except Exception as e:
-            print(f"ERROR: Failed to create parent task: {str(e)}", file=sys.stderr)
+            print(f"ERROR: Failed to create parent task: {e}", file=sys.stderr)
             print(f"ERROR: Task params were: {task_params}", file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
             raise
+        task_count += 1
 
-    created_tasks.append(parent_task)
+    # Save the parent task instance with Todoist ID
+    parent_task_instance.todoist_id = todoist_parent_id
+    if not debug:
+        parent_task_instance.save()
 
-    # Create all template tasks as subtasks of the parent
+    # Create child tasks from template
     for task_data in template.tasks:
         if task_data.block_type == 'task':
             task_block = task_data.value
-            created_task = create_task_recursive(api, task_block, token_values, parent_id=parent_task.id, debug=debug, indent=1)
-            if created_task:
-                created_tasks.append(created_task)
+            task_count += _create_task_recursive(
+                api, task_block, token_values,
+                parent_todoist_id=todoist_parent_id,
+                parent_task_instance=parent_task_instance,
+                parent_task_record=None,
+                debug=debug,
+                indent=1,
+            )
 
     if debug:
-        print("\n" + "="*80, file=sys.stderr)
-        print(f"DEBUG: Total tasks created: {len(created_tasks)}", file=sys.stderr)
-        print("="*80 + "\n", file=sys.stderr)
-    else:
-        # Create TaskGroup record to track this creation
-        TaskGroup.objects.create(
-            template=template,
-            token_values=token_values,
-            parent_task_id=parent_task.id
-        )
+        print("\n" + "=" * 80, file=sys.stderr)
+        print(f"DEBUG: Total tasks created: {task_count}", file=sys.stderr)
+        print("=" * 80 + "\n", file=sys.stderr)
 
-    return created_tasks
+    return {
+        'parent_task_instance': parent_task_instance,
+        'task_count': task_count,
+    }
 
 
-def create_task_recursive(api, task_block, token_values, parent_id=None, debug=False, indent=0):
-    """Recursively create a task and its subtasks
+def _create_task_recursive(api, task_block, token_values, parent_todoist_id=None,
+                           parent_task_instance=None, parent_task_record=None,
+                           debug=False, indent=0):
+    """Recursively create a task and its subtasks.
 
     Args:
         api: TodoistAPI instance (can be None if debug=True)
-        task_block: Task block data
+        task_block: Task block data from StreamField
         token_values: Dict of token replacements
-        parent_id: Parent task ID (None for top-level tasks)
+        parent_todoist_id: Todoist parent task ID
+        parent_task_instance: BaseParentTask instance (for creating Task records)
+        parent_task_record: Task instance (for creating SubTask records), or None for top-level
         debug: If True, print debug info instead of posting to API
         indent: Indentation level for debug output
-    """
 
-    # Substitute tokens in title
+    Returns:
+        Count of tasks created.
+    """
     title = substitute_tokens(task_block['title'], token_values)
 
-    # Parse labels
     labels = []
     if task_block.get('labels'):
         labels = [label.strip() for label in task_block['labels'].split(',') if label.strip()]
 
-    # Create task via API or print debug info
-    task_params = {
-        'content': title,
-    }
-
-    # Only add labels if there are any
+    task_params = {'content': title}
     if labels:
         task_params['labels'] = labels
+    if parent_todoist_id:
+        task_params['parent_id'] = parent_todoist_id
 
-    # Only add parent_id if it exists
-    if parent_id:
-        task_params['parent_id'] = parent_id
+    count = 0
 
     if debug:
-        # Debug mode: print task info
+        import random
         indent_str = "  " * indent
         print(f"{indent_str}Task: {title}", file=sys.stderr)
         if labels:
             print(f"{indent_str}  Labels: {', '.join(labels)}", file=sys.stderr)
-        if parent_id:
-            print(f"{indent_str}  Parent ID: {parent_id}", file=sys.stderr)
-
-        # Create a mock task object with just an id
-        class MockTask:
-            def __init__(self):
-                import random
-                self.id = f"debug_{random.randint(1000, 9999)}"
-
-        created_task = MockTask()
+        created_todoist_id = f"debug_{random.randint(1000, 9999)}"
+        count += 1
     else:
-        # Normal mode: create task via API
         try:
             print(f"DEBUG: Creating task with params: {task_params}", file=sys.stderr)
             created_task = api.add_task(**task_params)
-            print(f"DEBUG: Task created successfully: {created_task.id}", file=sys.stderr)
+            created_todoist_id = created_task.id
+            print(f"DEBUG: Task created successfully: {created_todoist_id}", file=sys.stderr)
         except Exception as e:
-            print(f"ERROR: Failed to create task: {str(e)}", file=sys.stderr)
+            print(f"ERROR: Failed to create task: {e}", file=sys.stderr)
             print(f"ERROR: Task params were: {task_params}", file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
             raise
+        count += 1
 
-    # Create subtasks if they exist (ListBlock returns a list of dicts)
+    # Create Task or SubTask record
+    task_record = None
+    if not debug:
+        if parent_task_record is None:
+            # Top-level task (child of parent task)
+            task_record = Task.objects.create(
+                parent_task=parent_task_instance,
+                todoist_id=created_todoist_id,
+                title=title,
+            )
+        else:
+            # Subtask
+            SubTask.objects.create(
+                task=parent_task_record,
+                todoist_id=created_todoist_id,
+                title=title,
+            )
+
+    # Recurse into subtasks
     if task_block.get('subtasks'):
         for subtask_data in task_block['subtasks']:
-            # Subtasks are plain dicts from ListBlock
-            create_task_recursive(api, subtask_data, token_values, parent_id=created_task.id, debug=debug, indent=indent+1)
+            count += _create_task_recursive(
+                api, subtask_data, token_values,
+                parent_todoist_id=created_todoist_id,
+                parent_task_instance=parent_task_instance,
+                parent_task_record=task_record if not debug else None,
+                debug=debug,
+                indent=indent + 1,
+            )
 
-    return created_task
+    return count

@@ -1,3 +1,4 @@
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from wagtail.models import Page
 from wagtail.fields import StreamField
@@ -52,33 +53,13 @@ class LabelActionRule(models.Model):
 class TaskSyncSettings(ClusterableModel, BaseSiteSetting):
     """Site-wide settings for task sync"""
 
-    tokens = models.CharField(
-        max_length=500,
-        blank=True,
-        help_text="Comma-separated list of tokens (e.g., SKU, VARIETYNAME)"
-    )
-
-    parent_task_title = models.CharField(
-        max_length=200,
-        blank=True,
-        help_text="Title template for parent task (can use tokens like {SKU}). If empty, uses the template page title."
-    )
-
-    description = models.TextField(
-        blank=True,
-        help_text="Description template for parent task (can use tokens like {SKU}). This will be prepended to the template description."
-    )
-
     todoist_project_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Todoist project ID where tasks should be created. Leave empty to create tasks in the inbox."
+        help_text="Default Todoist project ID. Templates can override this per-template."
     )
 
     panels = [
-        FieldPanel('tokens'),
-        FieldPanel('parent_task_title'),
-        FieldPanel('description'),
         FieldPanel('todoist_project_id'),
         InlinePanel('label_action_rules', label="Label Action Rules", heading="Rules for moving completed tasks between sections"),
     ]
@@ -86,19 +67,28 @@ class TaskSyncSettings(ClusterableModel, BaseSiteSetting):
     class Meta:
         verbose_name = 'Task Sync Settings'
 
-    def get_token_list(self):
-        """Return list of tokens from comma-separated string"""
-        if not self.tokens:
-            return []
-        return [token.strip() for token in self.tokens.split(',') if token.strip()]
-
 
 class BaseTaskGroupTemplate(Page):
     """Wagtail page type for task group templates"""
 
+    task_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        help_text="The type of parent task to create from this template"
+    )
+
+    todoist_project_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Todoist project ID. If empty, uses the default from Task Sync Settings."
+    )
+
     description = models.TextField(
         blank=True,
-        help_text="Description for this template (can use tokens like {SKU}). This will be appended to the site-wide description."
+        help_text="Description for this template (can use tokens). Appended to parent task description."
     )
 
     tasks = StreamField([
@@ -106,6 +96,8 @@ class BaseTaskGroupTemplate(Page):
     ], blank=True, use_json_field=True)
 
     content_panels = Page.content_panels + [
+        FieldPanel('task_type'),
+        FieldPanel('todoist_project_id'),
         FieldPanel('description'),
         FieldPanel('tasks'),
     ]
@@ -116,36 +108,145 @@ class BaseTaskGroupTemplate(Page):
         verbose_name = 'Task Group Template'
         verbose_name_plural = 'Task Group Templates'
 
+    def get_effective_project_id(self, site):
+        """Return todoist_project_id, falling back to TaskSyncSettings default."""
+        if self.todoist_project_id:
+            return self.todoist_project_id
+        sync_settings = TaskSyncSettings.for_site(site)
+        return sync_settings.todoist_project_id
 
-class TaskGroup(models.Model):
-    """Tracks each created set of tasks"""
+    def get_parent_task_model(self):
+        """Return the model class for creating parent tasks."""
+        if self.task_type:
+            return self.task_type.model_class()
+        return None
+
+    def get_token_field_names(self):
+        """Return token field names from the associated parent task model."""
+        model = self.get_parent_task_model()
+        if model:
+            return model.get_token_field_names()
+        return []
+
+    def get_context(self, request, *args, **kwargs):
+        context = super().get_context(request, *args, **kwargs)
+        context['token_field_names'] = self.get_token_field_names()
+        return context
+
+
+class BaseParentTask(models.Model):
+    """Base model for parent tasks created from templates.
+
+    Subclass this to add domain-specific fields (e.g., sku, variety_name).
+    Field names returned by get_token_field_names() serve as token names;
+    field values serve as token values for substitution in task titles.
+    """
+
+    todoist_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Todoist task ID for the parent task"
+    )
 
     template = models.ForeignKey(
         BaseTaskGroupTemplate,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='task_groups',
-        help_text="Template used to create this task group"
-    )
-
-    token_values = models.JSONField(
-        default=dict,
-        help_text="Token values used when creating this task group"
-    )
-
-    parent_task_id = models.CharField(
-        max_length=100,
-        help_text="Todoist parent task ID"
+        related_name='parent_tasks',
+        help_text="Template used to create this parent task"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = 'Task Group'
-        verbose_name_plural = 'Task Groups'
+        verbose_name = 'Parent Task'
+        verbose_name_plural = 'Parent Tasks'
         ordering = ['-created_at']
 
     def __str__(self):
-        template_name = self.template.title if self.template else "Unknown"
-        return f"Task Group from {template_name} ({self.created_at.strftime('%Y-%m-%d')})"
+        return f"{self.__class__.__name__} ({self.created_at.strftime('%Y-%m-%d')})"
+
+    @classmethod
+    def get_token_field_names(cls):
+        """Return list of field names to use as tokens. Override in subclasses."""
+        return []
+
+    def get_token_values(self):
+        """Return dict mapping token field names to their values."""
+        return {
+            field_name: getattr(self, field_name, '')
+            for field_name in self.get_token_field_names()
+        }
+
+    def get_parent_task_title(self):
+        """Return the title for the Todoist parent task. Override in subclasses."""
+        if self.template:
+            return self.template.title
+        return ''
+
+    def get_description(self):
+        """Return the description for the Todoist parent task. Override in subclasses."""
+        return ''
+
+
+class Task(models.Model):
+    """Represents a task created under a parent task in Todoist."""
+
+    parent_task = models.ForeignKey(
+        BaseParentTask,
+        on_delete=models.CASCADE,
+        related_name='tasks'
+    )
+
+    todoist_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Todoist task ID"
+    )
+
+    title = models.CharField(
+        max_length=500,
+        help_text="Task title as sent to Todoist"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Task'
+        verbose_name_plural = 'Tasks'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class SubTask(models.Model):
+    """Represents a subtask created under a task in Todoist."""
+
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='subtasks'
+    )
+
+    todoist_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Todoist subtask ID"
+    )
+
+    title = models.CharField(
+        max_length=500,
+        help_text="Subtask title as sent to Todoist"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Sub Task'
+        verbose_name_plural = 'Sub Tasks'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return self.title

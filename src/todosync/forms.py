@@ -1,5 +1,5 @@
 from django import forms
-from .models import BaseTaskGroupTemplate, TaskSyncSettings
+from .models import BaseTaskGroupTemplate
 
 
 class BaseTaskGroupCreationForm(forms.Form):
@@ -20,30 +20,30 @@ class BaseTaskGroupCreationForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         template_id = kwargs.pop('template_id', None)
-        site = kwargs.pop('site', None)
+        kwargs.pop('site', None)
         super().__init__(*args, **kwargs)
 
-        # If a template is selected, add dynamic token fields and set initial value
         if template_id:
             try:
                 template = BaseTaskGroupTemplate.objects.get(id=template_id)
-
-                # Set initial value for task_group_template field
                 self.fields['task_group_template'].initial = template
 
-                # Get tokens from site settings
-                if site:
-                    sync_settings = TaskSyncSettings.for_site(site)
-                    tokens = sync_settings.get_token_list()
-                else:
-                    tokens = []
-
-                for token in tokens:
-                    field_name = f'token_{token}'
-                    self.fields[field_name] = forms.CharField(
-                        label=token,
-                        required=True,
-                    )
+                parent_task_model = template.get_parent_task_model()
+                if parent_task_model:
+                    for field_name in parent_task_model.get_token_field_names():
+                        try:
+                            model_field = parent_task_model._meta.get_field(field_name)
+                            self.fields[f'token_{field_name}'] = forms.CharField(
+                                label=model_field.verbose_name.title() if model_field.verbose_name else field_name,
+                                required=not model_field.blank,
+                                help_text=model_field.help_text or '',
+                                max_length=getattr(model_field, 'max_length', None),
+                            )
+                        except Exception:
+                            self.fields[f'token_{field_name}'] = forms.CharField(
+                                label=field_name.replace('_', ' ').title(),
+                                required=True,
+                            )
             except BaseTaskGroupTemplate.DoesNotExist:
                 pass
 
@@ -55,7 +55,7 @@ class BaseTaskGroupCreationForm(forms.Form):
         token_values = {}
         for key, value in self.cleaned_data.items():
             if key.startswith('token_'):
-                token_name = key.replace('token_', '')
+                token_name = key[len('token_'):]
                 token_values[token_name] = value
 
         return token_values
