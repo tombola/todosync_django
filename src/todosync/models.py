@@ -166,6 +166,8 @@ class BaseParentTask(models.Model):
         blank=True,
         help_text="Todoist task ID for the parent task"
     )
+    section = models.CharField(max_length=50, blank=True, null=False, help_text="Todoist section - used as column in kanban board")
+    completed = models.BooleanField(default=0)
 
     template = models.ForeignKey(
         BaseTaskGroupTemplate,
@@ -177,6 +179,7 @@ class BaseParentTask(models.Model):
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
+
 
     class Meta:
         verbose_name = 'Parent Task'
