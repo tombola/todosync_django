@@ -153,21 +153,51 @@ class BaseTaskGroupTemplate(Page):
         return context
 
 
-class BaseParentTask(models.Model):
+class Task(models.Model):
+    """Represents a task in the Todoist hierarchy.
+
+    Used for both child tasks and subtasks — nesting is achieved via the
+    self-referential parent_task FK.
+    """
+
+    todoist_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Todoist task ID"
+    )
+    title = models.CharField(
+        max_length=500,
+        help_text="Task title as sent to Todoist"
+    )
+    section = models.CharField(max_length=50, blank=True, null=False, help_text="Todoist section - used as column in kanban board")
+    completed = models.BooleanField(default=False)
+    parent_task = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='subtasks',
+        help_text="Parent task (null for top-level tasks under a BaseParentTask)"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Task'
+        verbose_name_plural = 'Tasks'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class BaseParentTask(Task):
     """Base model for parent tasks created from templates.
 
     Subclass this to add domain-specific fields (e.g., sku, variety_name).
     Field names returned by get_token_field_names() serve as token names;
     field values serve as token values for substitution in task titles.
     """
-
-    todoist_id = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Todoist task ID for the parent task"
-    )
-    section = models.CharField(max_length=50, blank=True, null=False, help_text="Todoist section - used as column in kanban board")
-    completed = models.BooleanField(default=0)
 
     template = models.ForeignKey(
         BaseTaskGroupTemplate,
@@ -177,9 +207,6 @@ class BaseParentTask(models.Model):
         related_name='parent_tasks',
         help_text="Template used to create this parent task"
     )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
 
     class Meta:
         verbose_name = 'Parent Task'
@@ -210,65 +237,3 @@ class BaseParentTask(models.Model):
     def get_description(self):
         """Return the description for the Todoist parent task. Override in subclasses."""
         return ''
-
-
-class Task(models.Model):
-    """Represents a task created under a parent task in Todoist."""
-
-    parent_task = models.ForeignKey(
-        BaseParentTask,
-        on_delete=models.CASCADE,
-        related_name='tasks'
-    )
-
-    todoist_id = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Todoist task ID"
-    )
-
-    title = models.CharField(
-        max_length=500,
-        help_text="Task title as sent to Todoist"
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name = 'Task'
-        verbose_name_plural = 'Tasks'
-        ordering = ['created_at']
-
-    def __str__(self):
-        return self.title
-
-
-class SubTask(models.Model):
-    """Represents a subtask created under a task in Todoist."""
-
-    task = models.ForeignKey(
-        Task,
-        on_delete=models.CASCADE,
-        related_name='subtasks'
-    )
-
-    todoist_id = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Todoist subtask ID"
-    )
-
-    title = models.CharField(
-        max_length=500,
-        help_text="Subtask title as sent to Todoist"
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name = 'Sub Task'
-        verbose_name_plural = 'Sub Tasks'
-        ordering = ['created_at']
-
-    def __str__(self):
-        return self.title

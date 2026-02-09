@@ -6,7 +6,7 @@ from django.conf import settings
 from todoist_api_python.api import TodoistAPI
 from wagtail.models import Site
 
-from .models import BaseTaskGroupTemplate, Task, SubTask
+from .models import BaseTaskGroupTemplate, Task
 from .forms import BaseTaskGroupCreationForm
 from .utils import substitute_tokens
 
@@ -192,7 +192,6 @@ def create_tasks_from_template(api, template, token_values, site, form_descripti
             task_count += _create_task_recursive(
                 api, task_block, token_values,
                 parent_todoist_id=todoist_parent_id,
-                parent_task_instance=parent_task_instance,
                 parent_task_record=None,
                 debug=debug,
                 indent=1,
@@ -210,8 +209,7 @@ def create_tasks_from_template(api, template, token_values, site, form_descripti
 
 
 def _create_task_recursive(api, task_block, token_values, parent_todoist_id=None,
-                           parent_task_instance=None, parent_task_record=None,
-                           debug=False, indent=0):
+                           parent_task_record=None, debug=False, indent=0):
     """Recursively create a task and its subtasks.
 
     Args:
@@ -219,8 +217,7 @@ def _create_task_recursive(api, task_block, token_values, parent_todoist_id=None
         task_block: Task block data from StreamField
         token_values: Dict of token replacements
         parent_todoist_id: Todoist parent task ID
-        parent_task_instance: BaseParentTask instance (for creating Task records)
-        parent_task_record: Task instance (for creating SubTask records), or None for top-level
+        parent_task_record: Parent Task instance, or None for top-level tasks
         debug: If True, print debug info instead of posting to API
         indent: Indentation level for debug output
 
@@ -261,23 +258,14 @@ def _create_task_recursive(api, task_block, token_values, parent_todoist_id=None
             raise
         count += 1
 
-    # Create Task or SubTask record
+    # Create Task record (parent_task links to either the parent Task or None for top-level)
     task_record = None
     if not debug:
-        if parent_task_record is None:
-            # Top-level task (child of parent task)
-            task_record = Task.objects.create(
-                parent_task=parent_task_instance,
-                todoist_id=created_todoist_id,
-                title=title,
-            )
-        else:
-            # Subtask
-            SubTask.objects.create(
-                task=parent_task_record,
-                todoist_id=created_todoist_id,
-                title=title,
-            )
+        task_record = Task.objects.create(
+            parent_task=parent_task_record,
+            todoist_id=created_todoist_id,
+            title=title,
+        )
 
     # Recurse into subtasks
     if task_block.get('subtasks'):
@@ -285,7 +273,6 @@ def _create_task_recursive(api, task_block, token_values, parent_todoist_id=None
             count += _create_task_recursive(
                 api, subtask_data, token_values,
                 parent_todoist_id=created_todoist_id,
-                parent_task_instance=parent_task_instance,
                 parent_task_record=task_record if not debug else None,
                 debug=debug,
                 indent=indent + 1,

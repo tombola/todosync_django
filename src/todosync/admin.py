@@ -1,18 +1,10 @@
 from django.contrib import admin
-from .models import BaseParentTask, Task, SubTask
+from .models import BaseParentTask, Task
 
 
 class TaskInline(admin.TabularInline):
     model = Task
-    extra = 0
-    readonly_fields = ['todoist_id', 'title', 'created_at']
-
-    def has_add_permission(self, request, obj=None):
-        return False
-
-
-class SubTaskInline(admin.TabularInline):
-    model = SubTask
+    fk_name = 'parent_task'
     extra = 0
     readonly_fields = ['todoist_id', 'title', 'created_at']
 
@@ -35,7 +27,7 @@ class BaseParentTaskAdmin(admin.ModelAdmin):
 class TaskAdmin(admin.ModelAdmin):
     list_display = ['title', 'parent_task', 'todoist_id', 'created_at']
     readonly_fields = ['parent_task', 'todoist_id', 'title', 'created_at']
-    inlines = [SubTaskInline]
+    inlines = [TaskInline]
 
     def has_add_permission(self, request):
         return False
