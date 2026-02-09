@@ -10,6 +10,24 @@ from modelcluster.models import ClusterableModel
 from .blocks import TaskBlock
 
 
+def _parent_task_content_type_filter():
+    """Return Q filter for ContentTypes of all BaseParentTask subclasses."""
+    def _all_subclasses(cls):
+        result = []
+        for sub in cls.__subclasses__():
+            result.append(sub)
+            result.extend(_all_subclasses(sub))
+        return result
+
+    subclasses = _all_subclasses(BaseParentTask)
+    if not subclasses:
+        return models.Q(pk__in=[])
+    q = models.Q()
+    for sub in subclasses:
+        q |= models.Q(app_label=sub._meta.app_label, model=sub._meta.model_name)
+    return q
+
+
 class LabelActionRule(models.Model):
     """Rule for moving completed tasks to different sections based on label"""
 
@@ -77,6 +95,7 @@ class BaseTaskGroupTemplate(Page):
         null=True,
         blank=True,
         related_name='+',
+        limit_choices_to=_parent_task_content_type_filter,
         help_text="The type of parent task to create from this template"
     )
 
