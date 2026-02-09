@@ -169,7 +169,7 @@ class Task(models.Model):
         max_length=500,
         help_text="Task title as sent to Todoist"
     )
-    section = models.CharField(max_length=50, blank=True, null=False, help_text="Todoist section - used as column in kanban board")
+    todoist_section_id = models.CharField(max_length=50, blank=True, null=False, help_text="Todoist section - used as column in kanban board")
     completed = models.BooleanField(default=False)
     parent_task = models.ForeignKey(
         'self',
