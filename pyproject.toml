@@ -9,6 +9,8 @@ dependencies = [
     "wagtail>=6.0",
     "todoist-api-python>=3.1.0",
     "django-modelcluster>=6.0",
+    "django-click>=2.4.0",
+    "rich>=14.0.0",
 ]
 
 [project.optional-dependencies]
