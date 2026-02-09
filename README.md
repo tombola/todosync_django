@@ -7,9 +7,9 @@ Reusable Django/Wagtail package for Todoist task management integration.
 - **Template-based task creation** with token substitution
 - **Multi-table inheritance** for extensible task group templates
 - **Direct Todoist API integration** (no abstraction layer)
-- **Wagtail CMS integration** for managing templates
-- **Label-based routing rules** for webhook support
-- **Task group tracking** to record created task instances
+- **Wagtail CMS** used for managing templates
+- **Label-based rules** activated by webhook
+- **Task groups** tracked as task instances
 
 ## Installation
 
