@@ -1,0 +1,288 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Task Sync{% endblock %}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+        }
+
+        header {
+            background: #007bff;
+            color: white;
+            padding: 1rem 2rem;
+        }
+
+        header nav {
+            display: flex;
+            gap: 2rem;
+        }
+
+        header nav a {
+            color: white;
+            text-decoration: none;
+        }
+
+        header nav a:hover {
+            text-decoration: underline;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* Task group template styles */
+        .task-group-template {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .tokens-section, .tasks-section, .actions {
+            margin: 2rem 0;
+        }
+
+        .tokens-section h2, .tasks-section h2 {
+            font-size: 1.5em;
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .help-text {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 1rem;
+        }
+
+        .token-list {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .token-list li {
+            background: #f0f0f0;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+        }
+
+        .token-list code {
+            font-family: monospace;
+            background: #fff;
+            padding: 0.2rem 0.5rem;
+            border-radius: 2px;
+        }
+
+        .tasks-structure {
+            border-left: 3px solid #007bff;
+            padding-left: 1.5rem;
+        }
+
+        .task-item {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .task-item h3 {
+            margin: 0 0 0.5rem 0;
+            color: #007bff;
+        }
+
+        .labels {
+            font-size: 0.9em;
+            color: #666;
+            margin: 0.5rem 0;
+        }
+
+        .subtasks {
+            margin: 1rem 0 0 1.5rem;
+            list-style: disc;
+        }
+
+        .subtasks li {
+            margin: 0.5rem 0;
+        }
+
+        .subtasks .labels {
+            font-size: 0.85em;
+            color: #999;
+        }
+
+        .actions {
+            text-align: center;
+            padding: 2rem 0;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            background: #0056b3;
+        }
+
+        /* Messages */
+        .messages {
+            margin: 1rem 0;
+        }
+
+        .message {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-radius: 4px;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Form styles */
+        form {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        form > div {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        textarea {
+            resize: vertical;
+        }
+
+        .error {
+            color: #721c24;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .description-preview {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+
+        .description-section {
+            margin-bottom: 1rem;
+        }
+
+        .description-text {
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            background: white;
+            border-left: 3px solid #007bff;
+        }
+
+        .task-preview {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 4px;
+            margin: 2rem 0;
+        }
+
+        .task-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .task-list .task-item {
+            margin: 1rem 0;
+        }
+
+        .task-labels {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .subtask-list {
+            list-style: none;
+            padding-left: 2rem;
+            margin-top: 0.5rem;
+        }
+
+        .subtask-item {
+            margin: 0.5rem 0;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <header>
+        <nav>
+            {% block navigation %}
+            <a href="/">Home</a>
+            <a href="/admin/">Admin</a>
+            {% endblock %}
+        </nav>
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        {% block footer %}
+        <p>&copy; 2025 TodoSync</p>
+        {% endblock %}
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,59 @@
+{% extends "todosync/base.html" %}
+{% load static wagtailcore_tags %}
+
+{% block content %}
+<div class="task-group-template">
+    <h1>{{ page.title }}</h1>
+
+    {% if settings.todosync.TaskSyncSettings.tokens %}
+    <section class="tokens-section">
+        <h2>Tokens</h2>
+        <p class="help-text">The following tokens can be used in task titles (configured in site settings):</p>
+        <ul class="token-list">
+            {% for token in settings.todosync.TaskSyncSettings.get_token_list %}
+            <li><code>{​{ {{ token }} }​}</code></li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {% if page.tasks %}
+    <section class="tasks-section">
+        <h2>Tasks</h2>
+        <div class="tasks-structure">
+            {% for block in page.tasks %}
+                {% if block.block_type == 'task' %}
+                <div class="task-item">
+                    <h3>{{ block.value.title }}</h3>
+                    {% if block.value.labels %}
+                    <p class="labels">
+                        <strong>Labels:</strong> {{ block.value.labels }}
+                    </p>
+                    {% endif %}
+
+                    {% if block.value.subtasks %}
+                    <ul class="subtasks">
+                        {% for subtask in block.value.subtasks %}
+                        <li>
+                            {{ subtask.title }}
+                            {% if subtask.labels %}
+                            <span class="labels">({{ subtask.labels }})</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="actions">
+        <a href="{% url 'todosync:create_task_group' %}?template_id={{ page.id }}" class="button">
+            Create Tasks from this Template
+        </a>
+    </section>
+</div>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "todosync/base.html" %}
+
+{% block title %}Create Task Group{% endblock %}
+
+{% block content %}
+<h1>Create Task Group</h1>
+
+{% if messages %}
+<div class="messages">
+    {% for message in messages %}
+    <div class="message {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+
+    {% if template_id %}
+    <input type="hidden" name="template_id" value="{{ template_id }}">
+    {% endif %}
+
+    {# Render task_group_template field first #}
+    <div>
+        <label for="{{ form.task_group_template.id_for_label }}">
+            {{ form.task_group_template.label }}
+            {% if form.task_group_template.help_text %}
+            <span class="help-text">{{ form.task_group_template.help_text }}</span>
+            {% endif %}
+        </label>
+
+        {{ form.task_group_template }}
+
+        {% if form.task_group_template.errors %}
+        <div class="error">
+            {{ form.task_group_template.errors }}
+        </div>
+        {% endif %}
+    </div>
+
+    {# Show description preview after template field #}
+    {% if selected_template %}
+    <div class="description-preview">
+        <label>Parent task description:</label>
+
+        {% if sync_settings.description or selected_template.description %}
+        <div class="description-content">
+            {% if sync_settings.description %}
+            <div class="description-section">
+                <strong>Settings:</strong>
+                <p class="description-text">{{ sync_settings.description }}</p>
+            </div>
+            {% endif %}
+
+            {% if selected_template.description %}
+            <div class="description-section">
+                <strong>Template:</strong>
+                <p class="description-text">{{ selected_template.description }}</p>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="help-text">No description configured in settings or template.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# Render remaining fields (description and token fields) #}
+    {% for field in form %}
+        {% if field.name != 'task_group_template' %}
+        <div>
+            <label for="{{ field.id_for_label }}">
+                {{ field.label }}
+                {% if field.help_text %}
+                <span class="help-text">{{ field.help_text }}</span>
+                {% endif %}
+            </label>
+
+            {{ field }}
+
+            {% if field.errors %}
+            <div class="error">
+                {{ field.errors }}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    {% endfor %}
+
+    {% if template_id %}
+    <button type="submit" class="button">Create Tasks</button>
+    {% endif %}
+</form>
+
+{% if selected_template %}
+<div class="task-preview">
+    <p class="help-text">The following tasks will be created - <strong>title</strong> <em>(labels)</em>:</p>
+
+    <div class="task-structure">
+        {% if selected_template.tasks %}
+        <ul class="task-list">
+            {% for block in selected_template.tasks %}
+                {% if block.block_type == 'task' %}
+                <li class="task-item">
+                    <strong>{{ block.value.title }}</strong>
+                    {% if block.value.labels %}
+                    <span class="task-labels"><em>({{ block.value.labels }})</em></span>
+                    {% endif %}
+
+                    {% if block.value.subtasks %}
+                    <ul class="subtask-list">
+                        {% for subtask in block.value.subtasks %}
+                        <li class="subtask-item">
+                            {{ subtask.title }}
+                            {% if subtask.labels %}
+                            <span class="task-labels"><em>({{ subtask.labels }})</em></span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="no-tasks">No tasks defined in this template.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+    // When a template is selected from the dropdown, reload the page with the template_id
+    // query parameter. This triggers the form to dynamically generate input fields for
+    // each token defined in that template (e.g., if the template has tokens "SKU" and
+    // "VARIETYNAME", the form will show input fields for those values).
+    document.addEventListener('DOMContentLoaded', function() {
+        var templateSelect = document.querySelector('select[name="task_group_template"]');
+        if (templateSelect) {
+            templateSelect.addEventListener('change', function() {
+                if (this.value) {
+                    window.location.href = '?template_id=' + this.value;
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
