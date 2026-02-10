@@ -118,6 +118,10 @@ class BaseTaskGroupTemplate(Page):
         FieldPanel('task_type'),
         FieldPanel('project_id'),
         FieldPanel('description'),
+        HelpPanel(
+            content="All tasks should include tokens such as {SKU}, otherwise the todo tasks for different parent tasks will all have the same title.",
+            heading="Note",
+        ),
         FieldPanel('tasks'),
     ]
 
