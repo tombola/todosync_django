@@ -26,11 +26,11 @@ def _sign(body: bytes, secret: str) -> str:
 
 @pytest.fixture
 def tracked_task(db):
-    """A Task record that matches the todoist_id used in fixtures."""
+    """A Task record that matches the todo_id used in fixtures."""
     return Task.objects.create(
-        todoist_id="ABC123",
+        todo_id="ABC123",
         title="Sow tomatoes",
-        todoist_section_id="3Ty8VQXxpwv28PK3",
+        todo_section_id="3Ty8VQXxpwv28PK3",
         completed=False,
     )
 
@@ -96,9 +96,9 @@ def test_item_completed(client, tracked_task):
 
 def test_item_uncompleted(client, db):
     task = Task.objects.create(
-        todoist_id="ABC123",
+        todo_id="ABC123",
         title="Sow tomatoes",
-        todoist_section_id="3Ty8VQXxpwv28PK3",
+        todo_section_id="3Ty8VQXxpwv28PK3",
         completed=True,
     )
     body = _load_fixture("item_uncompleted.json")
@@ -130,7 +130,7 @@ def test_item_updated_section_change(client, tracked_task):
 
     assert response.status_code == 200
     tracked_task.refresh_from_db()
-    assert tracked_task.todoist_section_id == "9Zz2NEW_SECTION"
+    assert tracked_task.todo_section_id == "9Zz2NEW_SECTION"
     assert tracked_task.completed is False  # unchanged
 
 
@@ -142,7 +142,7 @@ def test_item_updated_no_change(client, tracked_task):
     assert response.status_code == 200
     tracked_task.refresh_from_db()
     assert tracked_task.completed is False
-    assert tracked_task.todoist_section_id == "3Ty8VQXxpwv28PK3"
+    assert tracked_task.todo_section_id == "3Ty8VQXxpwv28PK3"
 
 
 # -- item:added with checked=true --

@@ -71,14 +71,14 @@ class LabelActionRule(models.Model):
 class TaskSyncSettings(ClusterableModel, BaseSiteSetting):
     """Site-wide settings for task sync"""
 
-    todoist_project_id = models.CharField(
+    default_project_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Default Todoist project ID. Templates can override this per-template."
+        help_text="Default project ID for task sync. Templates can override this per-template."
     )
 
     panels = [
-        FieldPanel('todoist_project_id'),
+        FieldPanel('default_project_id'),
         InlinePanel('label_action_rules', label="Label Action Rules", heading="Rules for moving completed tasks between sections"),
     ]
 
@@ -99,10 +99,10 @@ class BaseTaskGroupTemplate(Page):
         help_text="The type of parent task to create from this template"
     )
 
-    todoist_project_id = models.CharField(
+    project_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Todoist project ID. If empty, uses the default from Task Sync Settings."
+        help_text="Project ID for task sync. If empty, uses the default from Task Sync Settings."
     )
 
     description = models.TextField(
@@ -116,7 +116,7 @@ class BaseTaskGroupTemplate(Page):
 
     content_panels = Page.content_panels + [
         FieldPanel('task_type'),
-        FieldPanel('todoist_project_id'),
+        FieldPanel('project_id'),
         FieldPanel('description'),
         FieldPanel('tasks'),
     ]
@@ -128,11 +128,11 @@ class BaseTaskGroupTemplate(Page):
         verbose_name_plural = 'Task Group Templates'
 
     def get_effective_project_id(self, site):
-        """Return todoist_project_id, falling back to TaskSyncSettings default."""
-        if self.todoist_project_id:
-            return self.todoist_project_id
+        """Return project_id, falling back to TaskSyncSettings default."""
+        if self.project_id:
+            return self.project_id
         sync_settings = TaskSyncSettings.for_site(site)
-        return sync_settings.todoist_project_id
+        return sync_settings.default_project_id
 
     def get_parent_task_model(self):
         """Return the model class for creating parent tasks."""
@@ -160,16 +160,16 @@ class Task(models.Model):
     self-referential parent_task FK.
     """
 
-    todoist_id = models.CharField(
+    todo_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Todoist task ID"
+        help_text="Task ID from external task management service"
     )
     title = models.CharField(
         max_length=500,
-        help_text="Task title as sent to Todoist"
+        help_text="Task title as sent to external service"
     )
-    todoist_section_id = models.CharField(max_length=50, blank=True, null=False, help_text="Todoist section - used as column in kanban board")
+    todo_section_id = models.CharField(max_length=50, blank=True, null=False, help_text="Section ID from external service — used as column in kanban board")
     completed = models.BooleanField(default=False)
     parent_task = models.ForeignKey(
         'self',
