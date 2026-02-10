@@ -25,7 +25,7 @@ class BaseTaskGroupCreationForm(forms.Form):
 
         if template_id:
             try:
-                template = BaseTaskGroupTemplate.objects.get(id=template_id)
+                template = BaseTaskGroupTemplate.objects.get(id=template_id).specific
                 self.fields['task_group_template'].initial = template
 
                 parent_task_model = template.get_parent_task_model()

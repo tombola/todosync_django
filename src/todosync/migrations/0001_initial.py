@@ -2,7 +2,6 @@
 
 import django.db.models.deletion
 import modelcluster.fields
-import todosync.models
 import wagtail.fields
 from django.db import migrations, models
 
@@ -41,7 +40,7 @@ class Migration(migrations.Migration):
                 ('project_id', models.CharField(blank=True, help_text='Project ID for task sync. If empty, uses the default from Task Sync Settings.', max_length=100)),
                 ('description', models.TextField(blank=True, help_text='Description for this template (can use tokens). Appended to parent task description.')),
                 ('tasks', wagtail.fields.StreamField([('task', 6)], blank=True, block_lookup={0: ('wagtail.blocks.CharBlock', (), {'help_text': 'Task title (can use tokens like {SKU})', 'required': True}), 1: ('wagtail.blocks.CharBlock', (), {'help_text': 'Comma-separated labels (e.g., sow, plant)', 'required': False}), 2: ('wagtail.blocks.CharBlock', (), {'help_text': 'Subtask title (can use tokens)', 'required': True}), 3: ('wagtail.blocks.CharBlock', (), {'help_text': 'Comma-separated labels', 'required': False}), 4: ('wagtail.blocks.StructBlock', [[('title', 2), ('labels', 3)]], {}), 5: ('wagtail.blocks.ListBlock', (4,), {'help_text': 'Subtasks for this task', 'required': False}), 6: ('wagtail.blocks.StructBlock', [[('title', 0), ('labels', 1), ('subtasks', 5)]], {})})),
-                ('task_type', models.ForeignKey(blank=True, help_text='The type of parent task to create from this template', limit_choices_to=todosync.models._parent_task_content_type_filter, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='contenttypes.contenttype')),
+                ('task_type', models.ForeignKey(blank=True, help_text='The type of parent task to create from this template', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='contenttypes.contenttype')),
             ],
             options={
                 'verbose_name': 'Task Group Template',

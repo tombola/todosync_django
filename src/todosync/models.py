@@ -1,31 +1,12 @@
-from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from wagtail.models import Page
 from wagtail.fields import StreamField
-from wagtail.admin.panels import FieldPanel, InlinePanel
+from wagtail.admin.panels import FieldPanel, HelpPanel, InlinePanel
 from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
 from modelcluster.fields import ParentalKey
 from modelcluster.models import ClusterableModel
 
 from .blocks import TaskBlock
-
-
-def _parent_task_content_type_filter():
-    """Return Q filter for ContentTypes of all BaseParentTask subclasses."""
-    def _all_subclasses(cls):
-        result = []
-        for sub in cls.__subclasses__():
-            result.append(sub)
-            result.extend(_all_subclasses(sub))
-        return result
-
-    subclasses = _all_subclasses(BaseParentTask)
-    if not subclasses:
-        return models.Q(pk__in=[])
-    q = models.Q()
-    for sub in subclasses:
-        q |= models.Q(app_label=sub._meta.app_label, model=sub._meta.model_name)
-    return q
 
 
 class LabelActionRule(models.Model):
@@ -87,17 +68,12 @@ class TaskSyncSettings(ClusterableModel, BaseSiteSetting):
 
 
 class BaseTaskGroupTemplate(Page):
-    """Wagtail page type for task group templates"""
+    """Wagtail page type for task group templates.
 
-    task_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='+',
-        limit_choices_to=_parent_task_content_type_filter,
-        help_text="The type of parent task to create from this template"
-    )
+    Subclasses should set parent_task_class to a BaseParentTask subclass.
+    """
+
+    parent_task_class = None
 
     project_id = models.CharField(
         max_length=100,
@@ -115,7 +91,6 @@ class BaseTaskGroupTemplate(Page):
     ], blank=True, use_json_field=True)
 
     content_panels = Page.content_panels + [
-        FieldPanel('task_type'),
         FieldPanel('project_id'),
         FieldPanel('description'),
         HelpPanel(
@@ -140,9 +115,7 @@ class BaseTaskGroupTemplate(Page):
 
     def get_parent_task_model(self):
         """Return the model class for creating parent tasks."""
-        if self.task_type:
-            return self.task_type.model_class()
-        return None
+        return self.parent_task_class
 
     def get_token_field_names(self):
         """Return token field names from the associated parent task model."""

@@ -25,7 +25,7 @@ def create_task_group(request):
         form = BaseTaskGroupCreationForm(request.POST, template_id=template_id, site=site)
 
         if form.is_valid():
-            template = form.cleaned_data['task_group_template']
+            template = form.cleaned_data['task_group_template'].specific
             token_values = form.get_token_values()
             form_description = form.cleaned_data.get('description', '')
 
@@ -91,7 +91,7 @@ def create_task_group(request):
     selected_template = None
     if template_id:
         try:
-            selected_template = BaseTaskGroupTemplate.objects.get(id=template_id)
+            selected_template = BaseTaskGroupTemplate.objects.get(id=template_id).specific
         except BaseTaskGroupTemplate.DoesNotExist:
             pass
 
