@@ -171,6 +171,16 @@ class Task(models.Model):
     )
     todo_section_id = models.CharField(max_length=50, blank=True, null=False, help_text="Section ID from external service — used as column in kanban board")
     completed = models.BooleanField(default=False)
+    start_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Scheduling/start date for this task"
+    )
+    due_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Hard deadline for this task"
+    )
     parent_task = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,

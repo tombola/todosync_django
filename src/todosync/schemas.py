@@ -22,6 +22,23 @@ class Duration(BaseModel):
     unit: Literal["minute", "day"]
 
 
+class Due(BaseModel):
+    """Todoist due/scheduling date object."""
+
+    date: str
+    string: str = ""
+    lang: str = "en"
+    is_recurring: bool = False
+    timezone: str | None = None
+
+
+class Deadline(BaseModel):
+    """Todoist hard deadline object."""
+
+    date: str
+    lang: str = "en"
+
+
 class TodoistItem(BaseModel):
     """Todoist task/item object from webhook event_data."""
 
@@ -46,6 +63,8 @@ class TodoistItem(BaseModel):
     updated_at: datetime | None = None
     completed_at: datetime | None = None
     duration: Duration | None = None
+    due: Due | None = None
+    deadline: Deadline | None = None
 
 
 class TodoistWebhookPayload(BaseModel):

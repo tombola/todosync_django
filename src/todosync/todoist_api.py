@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import logging
 import sys
+from datetime import date
 
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
@@ -269,6 +270,18 @@ def todoist_webhook(request):
         if item.checked != task.completed:
             task.completed = item.checked
             update_fields.append('completed')
+
+        # Sync start_date from Todoist's due.date
+        new_start = date.fromisoformat(item.due.date[:10]) if item.due else None
+        if new_start != task.start_date:
+            task.start_date = new_start
+            update_fields.append('start_date')
+
+        # Sync due_date from Todoist's deadline.date
+        new_due = date.fromisoformat(item.deadline.date[:10]) if item.deadline else None
+        if new_due != task.due_date:
+            task.due_date = new_due
+            update_fields.append('due_date')
 
     # Sync section changes for any event that carries section_id
     if item.section_id is not None and item.section_id != task.todo_section_id:
