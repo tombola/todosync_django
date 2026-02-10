@@ -1,14 +1,25 @@
+import base64
+import hashlib
+import hmac
+import logging
 import sys
 
-from django.shortcuts import render, redirect
-from django.contrib import messages
 from django.conf import settings
+from django.contrib import messages
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.shortcuts import redirect, render
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from pydantic import ValidationError
 from todoist_api_python.api import TodoistAPI
 from wagtail.models import Site
 
 from .models import BaseTaskGroupTemplate, Task
 from .forms import BaseTaskGroupCreationForm
+from .schemas import TodoistWebhookPayload, WebhookEventType
 from .utils import substitute_tokens
+
+logger = logging.getLogger(__name__)
 
 
 def create_task_group(request):
@@ -279,3 +290,73 @@ def _create_task_recursive(api, task_block, token_values, parent_todoist_id=None
             )
 
     return count
+
+
+def _verify_webhook_signature(request):
+    """Verify the HMAC-SHA256 signature from Todoist.
+
+    Returns True if TODOIST_WEBHOOK_SECRET is not configured (verification disabled).
+    """
+    secret = getattr(settings, 'TODOIST_WEBHOOK_SECRET', None)
+    if not secret:
+        return True
+
+    signature = request.headers.get('X-Todoist-Hmac-SHA256', '')
+    digest = hmac.new(secret.encode(), request.body, hashlib.sha256).digest()
+    expected = base64.b64encode(digest).decode()
+    return hmac.compare_digest(signature, expected)
+
+
+@csrf_exempt
+@require_POST
+def todoist_webhook(request):
+    """Receive webhook events from Todoist and sync task state.
+
+    Handles item:added, item:updated, item:deleted, item:completed,
+    and item:uncompleted events. Updates the local Task record's
+    completed status and section when a matching todoist_id is found.
+    """
+    if not _verify_webhook_signature(request):
+        logger.warning("Todoist webhook signature verification failed")
+        return HttpResponseForbidden()
+
+    try:
+        payload = TodoistWebhookPayload.model_validate_json(request.body)
+    except ValidationError:
+        logger.exception("Invalid Todoist webhook payload")
+        return HttpResponseBadRequest("Invalid payload")
+
+    item = payload.event_data
+    event = payload.event_name
+
+    try:
+        task = Task.objects.get(todoist_id=item.id)
+    except Task.DoesNotExist:
+        # Not a task we're tracking — acknowledge and ignore
+        return HttpResponse(status=200)
+
+    update_fields = []
+
+    if event in (WebhookEventType.ITEM_COMPLETED, WebhookEventType.ITEM_DELETED):
+        task.completed = True
+        update_fields.append('completed')
+    elif event == WebhookEventType.ITEM_UNCOMPLETED:
+        task.completed = False
+        update_fields.append('completed')
+    elif event in (WebhookEventType.ITEM_UPDATED, WebhookEventType.ITEM_ADDED):
+        if item.checked != task.completed:
+            task.completed = item.checked
+            update_fields.append('completed')
+
+    # Sync section changes for any event that carries section_id
+    if item.section_id is not None and item.section_id != task.todoist_section_id:
+        task.todoist_section_id = item.section_id
+        update_fields.append('todoist_section_id')
+
+    if update_fields:
+        task.save(update_fields=update_fields)
+        logger.info("Webhook %s: updated task %s (fields: %s)", event, item.id, update_fields)
+    else:
+        logger.debug("Webhook %s: no changes for task %s", event, item.id)
+
+    return HttpResponse(status=200)

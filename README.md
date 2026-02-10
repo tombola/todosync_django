@@ -52,6 +52,11 @@ TODOIST_API_TOKEN = os.getenv('TODOIST_API_TOKEN', '')
 
 # Optional: Enable debug mode to print tasks instead of creating them
 DEBUG_TASK_CREATION = os.getenv('DEBUG_TASK_CREATION', 'False').lower() in ('true', '1', 'yes')
+
+# Optional: Todoist webhook HMAC verification
+# This is your Todoist app's client secret, used to verify incoming webhook requests.
+# If not set, signature verification is skipped.
+TODOIST_WEBHOOK_SECRET = os.getenv('TODOIST_WEBHOOK_SECRET', '')
 ```
 
 ### 2. Include URLs
