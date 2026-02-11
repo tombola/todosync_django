@@ -1,14 +1,14 @@
 [project]
 name = "todosync-django"
 version = "0.2.0"
-description = "Reusable Django/Wagtail package for Todoist task management integration"
+description = "Reusable Django package for Todoist task management integration"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "django>=5.0",
-    "wagtail>=6.0",
     "todoist-api-python>=3.1.0",
-    "django-modelcluster>=6.0",
+    "django-jsonform>=2.22.0",
+    "django-polymorphic>=4.0",
     "django-click>=2.4.0",
     "rich>=14.0.0",
     "pydantic>=2.0",
