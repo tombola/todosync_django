@@ -81,17 +81,16 @@
     <div class="task-structure">
         {% if selected_template.tasks %}
         <ul class="task-list">
-            {% for block in selected_template.tasks %}
-                {% if block.block_type == 'task' %}
+            {% for task in selected_template.tasks %}
                 <li class="task-item">
-                    <strong>{{ block.value.title }}</strong>
-                    {% if block.value.labels %}
-                    <span class="task-labels"><em>({{ block.value.labels }})</em></span>
+                    <strong>{{ task.title }}</strong>
+                    {% if task.labels %}
+                    <span class="task-labels"><em>({{ task.labels }})</em></span>
                     {% endif %}
 
-                    {% if block.value.subtasks %}
+                    {% if task.subtasks %}
                     <ul class="subtask-list">
-                        {% for subtask in block.value.subtasks %}
+                        {% for subtask in task.subtasks %}
                         <li class="subtask-item">
                             {{ subtask.title }}
                             {% if subtask.labels %}
@@ -102,7 +101,6 @@
                     </ul>
                     {% endif %}
                 </li>
-                {% endif %}
             {% endfor %}
         </ul>
         {% else %}
