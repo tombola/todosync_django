@@ -14,8 +14,7 @@ import django
 django.setup()
 
 from todoist_api_python.api import TodoistAPI
-from tasks.models import TaskPlannerSettings
-from wagtail.models import Site
+from todosync.models import TaskSyncSettings
 
 def test_basic_task():
     """Test creating a basic task without any optional parameters"""
@@ -43,18 +42,17 @@ def test_task_with_project(basic_task_id=None):
     api = TodoistAPI(api_token)
 
     # Get project_id from settings
-    site = Site.objects.get(is_default_site=True)
-    settings = TaskPlannerSettings.for_site(site)
+    sync_settings = TaskSyncSettings.load()
 
-    if not settings.todoist_project_id:
+    if not sync_settings.default_project_id:
         print("\nTest 2: Skipped (no project_id configured in settings)")
         return None
 
-    print(f"\nTest 2: Task with project_id: {settings.todoist_project_id}")
+    print(f"\nTest 2: Task with project_id: {sync_settings.default_project_id}")
     try:
         task = api.add_task(
             content="Test task with project",
-            project_id=settings.todoist_project_id
+            project_id=sync_settings.default_project_id
         )
         print(f"✓ Success! Task ID: {task.id}")
         return task
@@ -112,10 +110,9 @@ def test_full_combination():
     api = TodoistAPI(api_token)
 
     # Get project_id from settings
-    site = Site.objects.get(is_default_site=True)
-    settings = TaskPlannerSettings.for_site(site)
+    sync_settings = TaskSyncSettings.load()
 
-    if not settings.todoist_project_id:
+    if not sync_settings.default_project_id:
         print("\nTest 5: Skipped (no project_id configured)")
         return None
 
@@ -124,7 +121,7 @@ def test_full_combination():
         task = api.add_task(
             content="Test task with all parameters",
             description="This is a test description",
-            project_id=settings.todoist_project_id,
+            project_id=sync_settings.default_project_id,
             labels=["test", "debug"]
         )
         print(f"✓ Success! Task ID: {task.id}")
