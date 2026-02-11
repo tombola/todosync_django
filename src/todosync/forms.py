@@ -6,7 +6,7 @@ class BaseTaskGroupCreationForm(forms.Form):
     """Form for creating task groups from templates"""
 
     task_group_template = forms.ModelChoiceField(
-        queryset=BaseTaskGroupTemplate.objects.live(),
+        queryset=BaseTaskGroupTemplate.objects.all(),
         required=True,
         help_text="Select a task group template"
     )
@@ -25,7 +25,7 @@ class BaseTaskGroupCreationForm(forms.Form):
 
         if template_id:
             try:
-                template = BaseTaskGroupTemplate.objects.get(id=template_id).specific
+                template = BaseTaskGroupTemplate.objects.get(id=template_id)
                 self.fields['task_group_template'].initial = template
 
                 parent_task_model = template.get_parent_task_model()
