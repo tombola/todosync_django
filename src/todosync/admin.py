@@ -1,5 +1,21 @@
 from django.contrib import admin
-from .models import BaseParentTask, Task
+from .models import BaseParentTask, LabelActionRule, Task, TaskSyncSettings
+
+
+class LabelActionRuleInline(admin.TabularInline):
+    model = LabelActionRule
+    extra = 1
+
+
+@admin.register(TaskSyncSettings)
+class TaskSyncSettingsAdmin(admin.ModelAdmin):
+    inlines = [LabelActionRuleInline]
+
+    def has_add_permission(self, request):
+        return not TaskSyncSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class TaskInline(admin.TabularInline):
