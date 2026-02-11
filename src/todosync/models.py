@@ -1,18 +1,12 @@
 from django.db import models
-from wagtail.models import Page
-from wagtail.fields import StreamField
-from wagtail.admin.panels import FieldPanel, HelpPanel, InlinePanel
-from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
-from modelcluster.fields import ParentalKey
-from modelcluster.models import ClusterableModel
-
-from .blocks import TaskBlock
+from django_jsonform.models.fields import JSONField
+from polymorphic.models import PolymorphicModel
 
 
 class LabelActionRule(models.Model):
     """Rule for moving completed tasks to different sections based on label"""
 
-    settings = ParentalKey(
+    settings = models.ForeignKey(
         'TaskSyncSettings',
         on_delete=models.CASCADE,
         related_name='label_action_rules'
@@ -34,12 +28,6 @@ class LabelActionRule(models.Model):
         help_text="Todoist section ID where completed tasks with this label should be moved"
     )
 
-    panels = [
-        FieldPanel('source_section_id'),
-        FieldPanel('label'),
-        FieldPanel('destination_section_id'),
-    ]
-
     class Meta:
         verbose_name = 'Label Action Rule'
         verbose_name_plural = 'Label Action Rules'
@@ -48,9 +36,8 @@ class LabelActionRule(models.Model):
         return f"Section {self.source_section_id}: {self.label} → Section {self.destination_section_id}"
 
 
-@register_setting
-class TaskSyncSettings(ClusterableModel, BaseSiteSetting):
-    """Site-wide settings for task sync"""
+class TaskSyncSettings(models.Model):
+    """Site-wide settings for task sync. Only one instance should exist."""
 
     default_project_id = models.CharField(
         max_length=100,
@@ -58,22 +45,73 @@ class TaskSyncSettings(ClusterableModel, BaseSiteSetting):
         help_text="Default project ID for task sync. Templates can override this per-template."
     )
 
-    panels = [
-        FieldPanel('default_project_id'),
-        InlinePanel('label_action_rules', label="Label Action Rules", heading="Rules for moving completed tasks between sections"),
-    ]
-
     class Meta:
         verbose_name = 'Task Sync Settings'
+        verbose_name_plural = 'Task Sync Settings'
+
+    def __str__(self):
+        return "Task Sync Settings"
+
+    def save(self, *args, **kwargs):
+        # Enforce singleton: always use pk=1
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
 
-class BaseTaskGroupTemplate(Page):
-    """Wagtail page type for task group templates.
+TASKS_SCHEMA = {
+    'type': 'array',
+    'title': 'Tasks',
+    'items': {
+        'type': 'object',
+        'title': 'Task',
+        'properties': {
+            'title': {
+                'type': 'string',
+                'title': 'Task title (can use tokens like {SKU})',
+            },
+            'labels': {
+                'type': 'string',
+                'title': 'Labels (comma-separated)',
+            },
+            'subtasks': {
+                'type': 'array',
+                'title': 'Subtasks',
+                'items': {
+                    'type': 'object',
+                    'title': 'Subtask',
+                    'properties': {
+                        'title': {
+                            'type': 'string',
+                            'title': 'Subtask title (can use tokens)',
+                        },
+                        'labels': {
+                            'type': 'string',
+                            'title': 'Labels (comma-separated)',
+                        },
+                    },
+                    'required': ['title'],
+                },
+            },
+        },
+        'required': ['title'],
+    },
+}
+
+
+class BaseTaskGroupTemplate(PolymorphicModel):
+    """Task group template for defining reusable task structures.
 
     Subclasses should set parent_task_class to a BaseParentTask subclass.
     """
 
     parent_task_class = None
+
+    title = models.CharField(max_length=255)
 
     project_id = models.CharField(
         max_length=100,
@@ -86,32 +124,26 @@ class BaseTaskGroupTemplate(Page):
         help_text="Description for this template (can use tokens). Appended to parent task description."
     )
 
-    tasks = StreamField([
-        ('task', TaskBlock()),
-    ], blank=True, use_json_field=True)
-
-    content_panels = Page.content_panels + [
-        FieldPanel('project_id'),
-        FieldPanel('description'),
-        HelpPanel(
-            content="All tasks should include tokens such as {SKU}, otherwise the todo tasks for different parent tasks will all have the same title.",
-            heading="Note",
-        ),
-        FieldPanel('tasks'),
-    ]
-
-    template = 'todosync/base_task_group_template.html'
+    tasks = JSONField(
+        schema=TASKS_SCHEMA,
+        blank=True,
+        default=list,
+        help_text="Task definitions with token placeholders."
+    )
 
     class Meta:
         verbose_name = 'Task Group Template'
         verbose_name_plural = 'Task Group Templates'
 
-    def get_effective_project_id(self, site):
+    def __str__(self):
+        return self.title
+
+    def get_effective_project_id(self):
         """Return project_id, falling back to TaskSyncSettings default."""
         if self.project_id:
             return self.project_id
-        sync_settings = TaskSyncSettings.for_site(site)
-        return sync_settings.default_project_id
+        settings = TaskSyncSettings.load()
+        return settings.default_project_id
 
     def get_parent_task_model(self):
         """Return the model class for creating parent tasks."""
@@ -123,11 +155,6 @@ class BaseTaskGroupTemplate(Page):
         if model:
             return model.get_token_field_names()
         return []
-
-    def get_context(self, request, *args, **kwargs):
-        context = super().get_context(request, *args, **kwargs)
-        context['token_field_names'] = self.get_token_field_names()
-        return context
 
 
 class Task(models.Model):
