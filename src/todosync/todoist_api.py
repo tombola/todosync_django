@@ -249,12 +249,12 @@ def todoist_webhook(request):
 
     item = payload.event_data
     event = payload.event_name
-    logger.info("Webhook received: %s for item %s", event, item.id)
+    logger.info("Webhook received: %s for item '%s' (%s)", event, item.content, item.id)
 
     try:
         task = Task.objects.get(todo_id=item.id)
     except Task.DoesNotExist:
-        logger.info("Webhook %s: item %s not tracked, ignoring", event, item.id)
+        logger.info("Webhook %s: item '%s' (%s) not tracked, ignoring", event, item.content, item.id)
         return HttpResponse(status=200)
 
     update_fields = []
@@ -289,8 +289,8 @@ def todoist_webhook(request):
 
     if update_fields:
         task.save(update_fields=update_fields)
-        logger.info("Webhook %s: updated task %s (fields: %s)", event, item.id, update_fields)
+        logger.info("Webhook %s: updated task '%s' (%s) (fields: %s)", event, item.content, item.id, update_fields)
     else:
-        logger.debug("Webhook %s: no changes for task %s", event, item.id)
+        logger.debug("Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id)
 
     return HttpResponse(status=200)
