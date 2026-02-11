@@ -32,14 +32,13 @@ def get_api_client():
     return TodoistAPI(api_token)
 
 
-def create_tasks_from_template(api, template, token_values, site, form_description='', dry_run=False):
+def create_tasks_from_template(api, template, token_values, form_description='', dry_run=False):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
         api: TodoistAPI instance (can be None if dry_run=True)
         template: BaseTaskGroupTemplate instance
         token_values: Dict of token replacements (field_name -> value)
-        site: Wagtail Site instance for accessing settings
         form_description: Optional description from the creation form
         dry_run: If True, skip API calls and DB writes; log planned actions at DEBUG level
 
@@ -48,7 +47,7 @@ def create_tasks_from_template(api, template, token_values, site, form_descripti
     """
     logger.info(
         "Creating tasks from template: '%s', tokens=%s, project=%s",
-        template.title, token_values, template.get_effective_project_id(site),
+        template.title, token_values, template.get_effective_project_id(),
     )
 
     if dry_run:
@@ -89,7 +88,7 @@ def create_tasks_from_template(api, template, token_values, site, form_descripti
     if parent_description:
         task_params['description'] = parent_description
 
-    project_id = template.get_effective_project_id(site)
+    project_id = template.get_effective_project_id()
     if project_id:
         task_params['project_id'] = project_id
 
@@ -121,15 +120,13 @@ def create_tasks_from_template(api, template, token_values, site, form_descripti
         parent_task_instance.save()
 
     # Create child tasks from template
-    for task_data in template.tasks:
-        if task_data.block_type == 'task':
-            task_block = task_data.value
-            task_count += _create_task_recursive(
-                api, task_block, token_values,
-                parent_todo_id=parent_todo_id,
-                parent_task_record=None,
-                dry_run=dry_run,
-            )
+    for task_block in (template.tasks or []):
+        task_count += _create_task_recursive(
+            api, task_block, token_values,
+            parent_todo_id=parent_todo_id,
+            parent_task_record=None,
+            dry_run=dry_run,
+        )
 
     logger.info(
         "Task group complete: template='%s', total_tasks=%d", template.title, task_count,
@@ -150,7 +147,7 @@ def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
 
     Args:
         api: TodoistAPI instance (can be None if dry_run=True)
-        task_block: Task block data from StreamField
+        task_block: Task dict from template JSON (title, labels, subtasks)
         token_values: Dict of token replacements
         parent_todo_id: External parent task ID
         parent_task_record: Parent Task instance, or None for top-level tasks
