@@ -29,25 +29,39 @@ def create_task_group(request):
             token_values = form.get_token_values()
             form_description = form.cleaned_data.get('description', '')
 
-            debug_mode = getattr(settings, 'DEBUG_TASK_CREATION', False)
+            dry_run = getattr(settings, 'DRY_RUN_TASK_CREATION', False)
+
+            logger.info(
+                "Task group creation requested: template='%s', tokens=%s",
+                template.title, token_values,
+            )
 
             try:
-                if debug_mode:
+                if dry_run:
                     result = create_tasks_from_template(
-                        None, template, token_values, site, form_description, debug=True
+                        None, template, token_values, site, form_description, dry_run=True
+                    )
+                    logger.info(
+                        "Task group created (dry run): template='%s', task_count=%d",
+                        template.title, result["task_count"],
                     )
                     messages.success(
                         request,
-                        f'DEBUG MODE: Printed {result["task_count"]} tasks to console'
+                        f'DRY RUN: Would create {result["task_count"]} tasks'
                     )
                 else:
                     api = get_api_client()
                     if not api:
+                        logger.warning("Task creation failed: Todoist API token not configured")
                         messages.error(request, 'Todoist API token not configured')
                         return redirect('todosync:create_task_group')
 
                     result = create_tasks_from_template(
-                        api, template, token_values, site, form_description, debug=False
+                        api, template, token_values, site, form_description,
+                    )
+                    logger.info(
+                        "Task group created: template='%s', task_count=%d",
+                        template.title, result["task_count"],
                     )
                     messages.success(
                         request,
@@ -57,6 +71,7 @@ def create_task_group(request):
                 return redirect('todosync:create_task_group')
 
             except Exception as e:
+                logger.exception("Task group creation failed: template='%s'", template.title)
                 error_message = str(e)
 
                 if '400 Client Error: Bad Request' in error_message:

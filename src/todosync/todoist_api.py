@@ -8,7 +8,6 @@ import base64
 import hashlib
 import hmac
 import logging
-import sys
 from datetime import date
 
 from django.conf import settings
@@ -33,25 +32,28 @@ def get_api_client():
     return TodoistAPI(api_token)
 
 
-def create_tasks_from_template(api, template, token_values, site, form_description='', debug=False):
+def create_tasks_from_template(api, template, token_values, site, form_description='', dry_run=False):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
-        api: TodoistAPI instance (can be None if debug=True)
+        api: TodoistAPI instance (can be None if dry_run=True)
         template: BaseTaskGroupTemplate instance
         token_values: Dict of token replacements (field_name -> value)
         site: Wagtail Site instance for accessing settings
         form_description: Optional description from the creation form
-        debug: If True, print debug info instead of posting to API
+        dry_run: If True, skip API calls and DB writes; log planned actions at DEBUG level
 
     Returns:
         Dict with 'parent_task_instance' and 'task_count'.
     """
-    if debug:
-        print("\n" + "=" * 80, file=sys.stderr)
-        print(f"DEBUG: Creating tasks from template: {template.title}", file=sys.stderr)
-        print(f"DEBUG: Token values: {token_values}", file=sys.stderr)
-        print("=" * 80 + "\n", file=sys.stderr)
+    logger.info(
+        "Creating tasks from template: '%s', tokens=%s, project=%s",
+        template.title, token_values, template.get_effective_project_id(site),
+    )
+
+    if dry_run:
+        logger.debug("Dry run: creating tasks from template '%s'", template.title)
+        logger.debug("Dry run: token values: %s", token_values)
 
     # Create the parent task model instance
     parent_task_model = template.get_parent_task_model()
@@ -93,30 +95,29 @@ def create_tasks_from_template(api, template, token_values, site, form_descripti
 
     task_count = 0
 
-    if debug:
+    if dry_run:
         import random
-        print(f"Parent Task: {parent_title}", file=sys.stderr)
+        logger.debug("Dry run: parent task: '%s'", parent_title)
         if parent_description:
-            print(f"  Description: {parent_description}", file=sys.stderr)
+            logger.debug("Dry run: description: %s", parent_description)
         if project_id:
-            print(f"  Project ID: {project_id}", file=sys.stderr)
-        parent_todo_id = f"debug_{random.randint(1000, 9999)}"
+            logger.debug("Dry run: project ID: %s", project_id)
+        parent_todo_id = f"dry_run_{random.randint(1000, 9999)}"
         task_count += 1
     else:
         try:
-            print(f"DEBUG: Creating parent task with params: {task_params}", file=sys.stderr)
+            logger.info("Creating parent task: '%s'", parent_title)
             todoist_parent = api.add_task(**task_params)
             parent_todo_id = todoist_parent.id
-            print(f"DEBUG: Parent task created successfully: {parent_todo_id}", file=sys.stderr)
-        except Exception as e:
-            print(f"ERROR: Failed to create parent task: {e}", file=sys.stderr)
-            print(f"ERROR: Task params were: {task_params}", file=sys.stderr)
+            logger.info("Parent task created: todo_id=%s", parent_todo_id)
+        except Exception:
+            logger.exception("Failed to create parent task: '%s'", parent_title)
             raise
         task_count += 1
 
     # Save the parent task instance with external ID
     parent_task_instance.todo_id = parent_todo_id
-    if not debug:
+    if not dry_run:
         parent_task_instance.save()
 
     # Create child tasks from template
@@ -127,14 +128,15 @@ def create_tasks_from_template(api, template, token_values, site, form_descripti
                 api, task_block, token_values,
                 parent_todo_id=parent_todo_id,
                 parent_task_record=None,
-                debug=debug,
-                indent=1,
+                dry_run=dry_run,
             )
 
-    if debug:
-        print("\n" + "=" * 80, file=sys.stderr)
-        print(f"DEBUG: Total tasks created: {task_count}", file=sys.stderr)
-        print("=" * 80 + "\n", file=sys.stderr)
+    logger.info(
+        "Task group complete: template='%s', total_tasks=%d", template.title, task_count,
+    )
+
+    if dry_run:
+        logger.debug("Dry run: total tasks: %d", task_count)
 
     return {
         'parent_task_instance': parent_task_instance,
@@ -143,17 +145,16 @@ def create_tasks_from_template(api, template, token_values, site, form_descripti
 
 
 def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
-                           parent_task_record=None, debug=False, indent=0):
+                           parent_task_record=None, dry_run=False):
     """Recursively create a task and its subtasks.
 
     Args:
-        api: TodoistAPI instance (can be None if debug=True)
+        api: TodoistAPI instance (can be None if dry_run=True)
         task_block: Task block data from StreamField
         token_values: Dict of token replacements
         parent_todo_id: External parent task ID
         parent_task_record: Parent Task instance, or None for top-level tasks
-        debug: If True, print debug info instead of posting to API
-        indent: Indentation level for debug output
+        dry_run: If True, skip API calls and DB writes; log planned actions at DEBUG level
 
     Returns:
         Count of tasks created.
@@ -172,29 +173,27 @@ def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
 
     count = 0
 
-    if debug:
+    if dry_run:
         import random
-        indent_str = "  " * indent
-        print(f"{indent_str}Task: {title}", file=sys.stderr)
+        logger.debug("Dry run: task: '%s'", title)
         if labels:
-            print(f"{indent_str}  Labels: {', '.join(labels)}", file=sys.stderr)
-        created_todo_id = f"debug_{random.randint(1000, 9999)}"
+            logger.debug("Dry run: labels: %s", ', '.join(labels))
+        created_todo_id = f"dry_run_{random.randint(1000, 9999)}"
         count += 1
     else:
         try:
-            print(f"DEBUG: Creating task with params: {task_params}", file=sys.stderr)
+            logger.info("Creating subtask: '%s' (parent=%s)", title, parent_todo_id)
             created_task = api.add_task(**task_params)
             created_todo_id = created_task.id
-            print(f"DEBUG: Task created successfully: {created_todo_id}", file=sys.stderr)
-        except Exception as e:
-            print(f"ERROR: Failed to create task: {e}", file=sys.stderr)
-            print(f"ERROR: Task params were: {task_params}", file=sys.stderr)
+            logger.info("Subtask created: '%s', todo_id=%s", title, created_todo_id)
+        except Exception:
+            logger.exception("Failed to create subtask: '%s'", title)
             raise
         count += 1
 
     # Create Task record (parent_task links to either the parent Task or None for top-level)
     task_record = None
-    if not debug:
+    if not dry_run:
         task_record = Task.objects.create(
             parent_task=parent_task_record,
             todo_id=created_todo_id,
@@ -207,9 +206,8 @@ def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
             count += _create_task_recursive(
                 api, subtask_data, token_values,
                 parent_todo_id=created_todo_id,
-                parent_task_record=task_record if not debug else None,
-                debug=debug,
-                indent=indent + 1,
+                parent_task_record=task_record if not dry_run else None,
+                dry_run=dry_run,
             )
 
     return count
@@ -251,11 +249,12 @@ def todoist_webhook(request):
 
     item = payload.event_data
     event = payload.event_name
+    logger.info("Webhook received: %s for item %s", event, item.id)
 
     try:
         task = Task.objects.get(todo_id=item.id)
     except Task.DoesNotExist:
-        # Not a task we're tracking — acknowledge and ignore
+        logger.info("Webhook %s: item %s not tracked, ignoring", event, item.id)
         return HttpResponse(status=200)
 
     update_fields = []
