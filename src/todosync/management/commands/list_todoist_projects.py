@@ -70,7 +70,7 @@ def command():
         console.print()
         console.print(
             '[green]To use a project for task creation, add its ID to the '
-            'todoist_project_id field in Wagtail Admin → Settings → Task Sync Settings[/green]'
+            'default_project_id field in Django Admin → Task Sync Settings[/green]'
         )
 
     except Exception as e:

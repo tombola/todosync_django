@@ -73,7 +73,7 @@ def command(project_id):
         console.print()
         console.print(
             '[green]To use a section for label rules, add its ID to the '
-            'Label Action Rules in Wagtail Admin → Settings → Task Sync Settings[/green]'
+            'Label Action Rules in Django Admin → Task Sync Settings[/green]'
         )
 
     except Exception as e:
