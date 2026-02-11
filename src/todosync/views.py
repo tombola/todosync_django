@@ -15,17 +15,12 @@ def create_task_group(request):
     """View for creating task groups from templates"""
 
     template_id = request.GET.get('template_id') or request.POST.get('template_id')
-    site = request.site if hasattr(request, 'site') else None
-
-    if site is None:
-        from wagtail.models import Site
-        site = Site.find_for_request(request)
 
     if request.method == 'POST':
-        form = BaseTaskGroupCreationForm(request.POST, template_id=template_id, site=site)
+        form = BaseTaskGroupCreationForm(request.POST, template_id=template_id)
 
         if form.is_valid():
-            template = form.cleaned_data['task_group_template'].specific
+            template = form.cleaned_data['task_group_template']
             token_values = form.get_token_values()
             form_description = form.cleaned_data.get('description', '')
 
@@ -39,7 +34,7 @@ def create_task_group(request):
             try:
                 if dry_run:
                     result = create_tasks_from_template(
-                        None, template, token_values, site, form_description, dry_run=True
+                        None, template, token_values, form_description, dry_run=True
                     )
                     logger.info(
                         "Task group created (dry run): template='%s', task_count=%d",
@@ -57,7 +52,7 @@ def create_task_group(request):
                         return redirect('todosync:create_task_group')
 
                     result = create_tasks_from_template(
-                        api, template, token_values, site, form_description,
+                        api, template, token_values, form_description,
                     )
                     logger.info(
                         "Task group created: template='%s', task_count=%d",
@@ -75,7 +70,7 @@ def create_task_group(request):
                 error_message = str(e)
 
                 if '400 Client Error: Bad Request' in error_message:
-                    project_id = template.get_effective_project_id(site)
+                    project_id = template.get_effective_project_id()
                     if project_id:
                         messages.error(
                             request,
@@ -101,12 +96,12 @@ def create_task_group(request):
                     messages.error(request, f'Error creating tasks: {error_message}')
 
     else:
-        form = BaseTaskGroupCreationForm(template_id=template_id, site=site)
+        form = BaseTaskGroupCreationForm(template_id=template_id)
 
     selected_template = None
     if template_id:
         try:
-            selected_template = BaseTaskGroupTemplate.objects.get(id=template_id).specific
+            selected_template = BaseTaskGroupTemplate.objects.get(id=template_id)
         except BaseTaskGroupTemplate.DoesNotExist:
             pass
 
