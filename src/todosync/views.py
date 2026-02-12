@@ -2,6 +2,7 @@ import logging
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import redirect, render
 
 from .models import BaseTaskGroupTemplate
@@ -11,6 +12,7 @@ from .todoist_api import get_api_client, create_tasks_from_template
 logger = logging.getLogger(__name__)
 
 
+@staff_member_required
 def create_task_group(request):
     """View for creating task groups from templates
     creates tasks *from* a template, not a new template itself.
