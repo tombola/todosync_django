@@ -68,6 +68,7 @@ def create_tasks_from_template(api, template, token_values, form_description='',
 
     # Get title and description from the instance
     parent_title = parent_task_instance.get_parent_task_title()
+    parent_task_instance.title = parent_title
 
     # Build description from instance + template + form
     description_parts = []
