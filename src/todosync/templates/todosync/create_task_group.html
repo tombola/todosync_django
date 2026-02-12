@@ -24,13 +24,11 @@
     <div>
         <label for="{{ form.task_group_template.id_for_label }}">
             {{ form.task_group_template.label }}
-            {% if form.task_group_template.help_text %}
-            <span class="help-text">{{ form.task_group_template.help_text }}</span>
-            {% endif %}
         </label>
-
         {{ form.task_group_template }}
-
+        {% if form.task_group_template.help_text %}
+        <p class="help-text">{{ form.task_group_template.help_text }}</p>
+        {% endif %}
         {% if form.task_group_template.errors %}
         <div class="error">
             {{ form.task_group_template.errors }}
@@ -47,27 +45,31 @@
     </div>
     {% endif %}
 
-    {# Render remaining fields (description and token fields) #}
+    {# Render token fields #}
     {% for field in form %}
-        {% if field.name != 'task_group_template' %}
+        {% if field.name != 'task_group_template' and field.name != 'description' %}
         <div>
-            <label for="{{ field.id_for_label }}">
-                {{ field.label }}
-                {% if field.help_text %}
-                <span class="help-text">{{ field.help_text }}</span>
-                {% endif %}
-            </label>
-
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
             {{ field }}
-
             {% if field.errors %}
-            <div class="error">
-                {{ field.errors }}
-            </div>
+            <div class="error">{{ field.errors }}</div>
             {% endif %}
         </div>
         {% endif %}
     {% endfor %}
+
+    {# Description field, collapsed by default #}
+    {% if form.description %}
+    <details>
+        <summary>{{ form.description.label }}</summary>
+        <div>
+            {{ form.description }}
+            {% if form.description.errors %}
+            <div class="error">{{ form.description.errors }}</div>
+            {% endif %}
+        </div>
+    </details>
+    {% endif %}
 
     {% if template_id %}
     <button type="submit" class="button">Create Tasks</button>
