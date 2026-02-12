@@ -101,9 +101,20 @@ def create_task_group(request):
         form = BaseTaskGroupCreationForm(template_id=template_id)
 
     selected_template = None
+    token_field_names = []
+    parent_task_title_template = ''
+    parent_task_description_template = ''
     if template_id:
         try:
             selected_template = BaseTaskGroupTemplate.objects.get(id=template_id)
+            token_field_names = selected_template.get_token_field_names()
+            parent_task_model = selected_template.get_parent_task_model()
+            if parent_task_model:
+                dummy = parent_task_model()
+                for name in token_field_names:
+                    setattr(dummy, name, '{' + name + '}')
+                parent_task_title_template = dummy.get_parent_task_title()
+                parent_task_description_template = dummy.get_description()
         except BaseTaskGroupTemplate.DoesNotExist:
             pass
 
@@ -111,4 +122,7 @@ def create_task_group(request):
         'form': form,
         'template_id': template_id,
         'selected_template': selected_template,
+        'token_field_names': token_field_names,
+        'parent_task_title_template': parent_task_title_template,
+        'parent_task_description_template': parent_task_description_template,
     })

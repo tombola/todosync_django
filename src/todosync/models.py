@@ -7,30 +7,27 @@ class LabelActionRule(models.Model):
     """Rule for moving completed tasks to different sections based on label"""
 
     settings = models.ForeignKey(
-        'TaskSyncSettings',
-        on_delete=models.CASCADE,
-        related_name='label_action_rules'
+        "TaskSyncSettings", on_delete=models.CASCADE, related_name="label_action_rules"
     )
 
     source_section_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Todoist section ID to monitor for completed tasks with this label"
+        help_text="Todoist section ID to monitor for completed tasks with this label",
     )
 
     label = models.CharField(
-        max_length=100,
-        help_text="Label to match (e.g., 'harvest', 'plant')"
+        max_length=100, help_text="Label to match (e.g., 'harvest', 'plant')"
     )
 
     destination_section_id = models.CharField(
         max_length=100,
-        help_text="Todoist section ID where completed tasks with this label should be moved"
+        help_text="Todoist section ID where completed tasks with this label should be moved",
     )
 
     class Meta:
-        verbose_name = 'Label Action Rule'
-        verbose_name_plural = 'Label Action Rules'
+        verbose_name = "Label Action Rule"
+        verbose_name_plural = "Label Action Rules"
 
     def __str__(self):
         return f"Section {self.source_section_id}: {self.label} → Section {self.destination_section_id}"
@@ -42,12 +39,12 @@ class TaskSyncSettings(models.Model):
     default_project_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Default project ID for task sync. Templates can override this per-template."
+        help_text="Default project ID for task sync. Templates can override this per-template.",
     )
 
     class Meta:
-        verbose_name = 'Task Sync Settings'
-        verbose_name_plural = 'Task Sync Settings'
+        verbose_name = "Task Sync Settings"
+        verbose_name_plural = "Task Sync Settings"
 
     def __str__(self):
         return "Task Sync Settings"
@@ -64,41 +61,41 @@ class TaskSyncSettings(models.Model):
 
 
 TASKS_SCHEMA = {
-    'type': 'array',
-    'title': 'Tasks',
-    'items': {
-        'type': 'object',
-        'title': 'Task',
-        'properties': {
-            'title': {
-                'type': 'string',
-                'title': 'Task title (can use tokens like {SKU})',
+    "type": "array",
+    "title": "Tasks",
+    "items": {
+        "type": "object",
+        "title": "Task",
+        "properties": {
+            "title": {
+                "type": "string",
+                "title": "Task title (can use tokens like {SKU})",
             },
-            'labels': {
-                'type': 'string',
-                'title': 'Labels (comma-separated)',
+            "labels": {
+                "type": "string",
+                "title": "Labels (comma-separated)",
             },
-            'subtasks': {
-                'type': 'array',
-                'title': 'Subtasks',
-                'items': {
-                    'type': 'object',
-                    'title': 'Subtask',
-                    'properties': {
-                        'title': {
-                            'type': 'string',
-                            'title': 'Subtask title (can use tokens)',
+            "subtasks": {
+                "type": "array",
+                "title": "Subtasks",
+                "items": {
+                    "type": "object",
+                    "title": "Subtask",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "title": "Subtask title (can use tokens)",
                         },
-                        'labels': {
-                            'type': 'string',
-                            'title': 'Labels (comma-separated)',
+                        "labels": {
+                            "type": "string",
+                            "title": "Labels (comma-separated)",
                         },
                     },
-                    'required': ['title'],
+                    "required": ["title"],
                 },
             },
         },
-        'required': ['title'],
+        "required": ["title"],
     },
 }
 
@@ -116,24 +113,24 @@ class BaseTaskGroupTemplate(PolymorphicModel):
     project_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Project ID for task sync. If empty, uses the default from Task Sync Settings."
+        help_text="Project ID for task sync. If empty, uses the default from Task Sync Settings.",
     )
 
     description = models.TextField(
         blank=True,
-        help_text="Description for this template (can use tokens). Appended to parent task description."
+        help_text="Description for this template (can use tokens). Appended to parent task description.",
     )
 
     tasks = JSONField(
         schema=TASKS_SCHEMA,
         blank=True,
         default=list,
-        help_text="Task definitions with token placeholders."
+        help_text="Task definitions with token placeholders.",
     )
 
     class Meta:
-        verbose_name = 'Task Group Template'
-        verbose_name_plural = 'Task Group Templates'
+        verbose_name = "Task Group Template"
+        verbose_name_plural = "Task Group Templates"
 
     def __str__(self):
         return self.title
@@ -167,39 +164,39 @@ class Task(models.Model):
     todo_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Task ID from external task management service"
+        help_text="Task ID from external task management service",
     )
     title = models.CharField(
-        max_length=500,
-        help_text="Task title as sent to external service"
+        max_length=500, help_text="Task title as sent to external service"
     )
-    todo_section_id = models.CharField(max_length=50, blank=True, null=False, help_text="Section ID from external service — used as column in kanban board")
+    todo_section_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=False,
+        help_text="Section ID from external service — used as column in kanban board",
+    )
     completed = models.BooleanField(default=False)
     start_date = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Scheduling/start date for this task"
+        null=True, blank=True, help_text="Scheduling/start date for this task"
     )
     due_date = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Hard deadline for this task"
+        null=True, blank=True, help_text="Hard deadline for this task"
     )
     parent_task = models.ForeignKey(
-        'self',
+        "self",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='subtasks',
-        help_text="Parent task (null for top-level tasks under a BaseParentTask)"
+        related_name="subtasks",
+        help_text="Parent task (null for top-level tasks under a BaseParentTask)",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = 'Task'
-        verbose_name_plural = 'Tasks'
-        ordering = ['created_at']
+        verbose_name = "Task"
+        verbose_name_plural = "Tasks"
+        ordering = ["created_at"]
 
     def __str__(self):
         return self.title
@@ -218,14 +215,14 @@ class BaseParentTask(Task):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='parent_tasks',
-        help_text="Template used to create this parent task"
+        related_name="parent_tasks",
+        help_text="Template used to create this parent task",
     )
 
     class Meta:
-        verbose_name = 'Parent Task'
-        verbose_name_plural = 'Parent Tasks'
-        ordering = ['-created_at']
+        verbose_name = "Parent Task"
+        verbose_name_plural = "Parent Tasks"
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.__class__.__name__} ({self.created_at.strftime('%Y-%m-%d')})"
@@ -238,7 +235,7 @@ class BaseParentTask(Task):
     def get_token_values(self):
         """Return dict mapping token field names to their values."""
         return {
-            field_name: getattr(self, field_name, '')
+            field_name: getattr(self, field_name, "")
             for field_name in self.get_token_field_names()
         }
 
@@ -246,8 +243,8 @@ class BaseParentTask(Task):
         """Return the title for the Todoist parent task. Override in subclasses."""
         if self.template:
             return self.template.title
-        return ''
+        return ""
 
     def get_description(self):
         """Return the description for the Todoist parent task. Override in subclasses."""
-        return ''
+        return ""

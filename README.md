@@ -73,7 +73,15 @@ urlpatterns = [
 ]
 ```
 
-### 3. Run migrations
+### 3. Include Alpine.js
+
+The task creation form uses [Alpine.js](https://alpinejs.dev/) for live preview. Add the CDN script to your base template:
+
+```html
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+```
+
+### 4. Run migrations
 
 ```bash
 python manage.py migrate

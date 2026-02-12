@@ -1,9 +1,9 @@
 {% extends "todosync/base.html" %}
 
-{% block title %}Create Task Group{% endblock %}
+{% block title %}Create Tasks from Template{% endblock %}
 
 {% block content %}
-<h1>Create Task Group</h1>
+<h1>Create Tasks from Template</h1>
 
 {% if messages %}
 <div class="messages">
@@ -12,6 +12,10 @@
     {% endfor %}
 </div>
 {% endif %}
+
+{{ token_field_names|json_script:"token-field-names" }}
+
+<div x-data="taskPreview()" class="create-task-layout">
 
 <form method="post">
     {% csrf_token %}
@@ -35,15 +39,6 @@
         </div>
         {% endif %}
     </div>
-
-    {% if selected_template.description %}
-    <div class="description-preview">
-        <label>Template description:</label>
-        <div class="description-content">
-            <p class="description-text">{{ selected_template.description }}</p>
-        </div>
-    </div>
-    {% endif %}
 
     {# Render token fields #}
     {% for field in form %}
@@ -78,14 +73,24 @@
 
 {% if selected_template %}
 <div class="task-preview">
-    <p class="help-text">The following tasks will be created - <strong>title</strong> <em>(labels)</em>:</p>
+    {% if parent_task_title_template %}
+    <h3><span x-text="replace('{{ parent_task_title_template|escapejs }}')">{{ parent_task_title_template }}</span></h3>
+    {% endif %}
+
+    {% if parent_task_description_template %}
+    <pre class="description-text" x-text="replace('{{ parent_task_description_template|escapejs }}')">{{ parent_task_description_template }}</pre>
+    {% endif %}
+
+    <template x-if="additionalDescription.trim()">
+        <pre class="description-text" x-text="replace(additionalDescription)"></pre>
+    </template>
 
     <div class="task-structure">
         {% if selected_template.tasks %}
         <ul class="task-list">
             {% for task in selected_template.tasks %}
                 <li class="task-item">
-                    <strong>{{ task.title }}</strong>
+                    <strong x-text="replace('{{ task.title|escapejs }}')">{{ task.title }}</strong>
                     {% if task.labels %}
                     <span class="task-labels"><em>({{ task.labels }})</em></span>
                     {% endif %}
@@ -94,7 +99,7 @@
                     <ul class="subtask-list">
                         {% for subtask in task.subtasks %}
                         <li class="subtask-item">
-                            {{ subtask.title }}
+                            <span x-text="replace('{{ subtask.title|escapejs }}')">{{ subtask.title }}</span>
                             {% if subtask.labels %}
                             <span class="task-labels"><em>({{ subtask.labels }})</em></span>
                             {% endif %}
@@ -112,20 +117,55 @@
 </div>
 {% endif %}
 
+{% if not selected_template %}
+<div></div>{# empty column when no preview #}
+{% endif %}
+
+</div>{# /x-data .create-task-layout #}
+{% endblock %}
+
+{% block extra_js %}
 <script>
-    // When a template is selected from the dropdown, reload the page with the template_id
-    // query parameter. This triggers the form to dynamically generate input fields for
-    // each token defined in that template (e.g., if the template has tokens "SKU" and
-    // "VARIETYNAME", the form will show input fields for those values).
-    document.addEventListener('DOMContentLoaded', function() {
-        var templateSelect = document.querySelector('select[name="task_group_template"]');
-        if (templateSelect) {
-            templateSelect.addEventListener('change', function() {
-                if (this.value) {
-                    window.location.href = '?template_id=' + this.value;
+function taskPreview() {
+    const el = document.getElementById('token-field-names');
+    const names = el ? JSON.parse(el.textContent) : [];
+    return {
+        tokens: Object.fromEntries(names.map(n => [n, ''])),
+        additionalDescription: '',
+        replace(text) {
+            let result = text;
+            for (const [key, val] of Object.entries(this.tokens)) {
+                result = result.replaceAll('{' + key + '}', val || ('{' + key + '}'));
+            }
+            return result;
+        },
+        init() {
+            for (const name of names) {
+                const input = document.querySelector('[name="token_' + name + '"]');
+                if (input) {
+                    if (input.value) this.tokens[name] = input.value;
+                    input.addEventListener('input', e => { this.tokens[name] = e.target.value; });
                 }
-            });
+            }
+            const desc = document.querySelector('[name="description"]');
+            if (desc) {
+                if (desc.value) this.additionalDescription = desc.value;
+                desc.addEventListener('input', e => { this.additionalDescription = e.target.value; });
+            }
         }
-    });
+    };
+}
+
+// Template selector: reload page with template_id when changed
+document.addEventListener('DOMContentLoaded', function() {
+    var templateSelect = document.querySelector('select[name="task_group_template"]');
+    if (templateSelect) {
+        templateSelect.addEventListener('change', function() {
+            if (this.value) {
+                window.location.href = '?template_id=' + this.value;
+            }
+        });
+    }
+});
 </script>
 {% endblock %}
