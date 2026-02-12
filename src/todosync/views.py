@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 def create_task_group(request):
-    """View for creating task groups from templates"""
+    """View for creating task groups from templates
+    creates tasks *from* a template, not a new template itself.
+    """
 
     template_id = request.GET.get('template_id') or request.POST.get('template_id')
 
