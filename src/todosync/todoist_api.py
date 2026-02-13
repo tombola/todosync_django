@@ -163,9 +163,15 @@ def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
     if task_block.get('labels'):
         labels = [label.strip() for label in task_block['labels'].split(',') if label.strip()]
 
+    due_date_str = ''
+    if task_block.get('due_date'):
+        due_date_str = substitute_tokens(task_block['due_date'], token_values)
+
     task_params = {'content': title}
     if labels:
         task_params['labels'] = labels
+    if due_date_str:
+        task_params['due_date'] = due_date_str
     if parent_todo_id:
         task_params['parent_id'] = parent_todo_id
 
@@ -190,13 +196,17 @@ def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
         count += 1
 
     # Create Task record (parent_task links to either the parent Task or None for top-level)
+    task_kwargs = {
+        'parent_task': parent_task_record,
+        'todo_id': created_todo_id,
+        'title': title,
+    }
+    if due_date_str:
+        task_kwargs['due_date'] = date.fromisoformat(due_date_str)
+
     task_record = None
     if not dry_run:
-        task_record = Task.objects.create(
-            parent_task=parent_task_record,
-            todo_id=created_todo_id,
-            title=title,
-        )
+        task_record = Task.objects.create(**task_kwargs)
 
     # Recurse into subtasks
     if task_block.get('subtasks'):
@@ -268,14 +278,8 @@ def todoist_webhook(request):
             task.completed = item.checked
             update_fields.append('completed')
 
-        # Sync start_date from Todoist's due.date
-        new_start = date.fromisoformat(item.due.date[:10]) if item.due else None
-        if new_start != task.start_date:
-            task.start_date = new_start
-            update_fields.append('start_date')
-
-        # Sync due_date from Todoist's deadline.date
-        new_due = date.fromisoformat(item.deadline.date[:10]) if item.deadline else None
+        # Sync due_date from Todoist's due.date
+        new_due = date.fromisoformat(item.due.date[:10]) if item.due else None
         if new_due != task.due_date:
             task.due_date = new_due
             update_fields.append('due_date')

@@ -75,6 +75,10 @@ TASKS_SCHEMA = {
                 "type": "string",
                 "title": "Labels (comma-separated)",
             },
+            "due_date": {
+                "type": "string",
+                "title": "Due date (YYYY-MM-DD, can use tokens)",
+            },
             "subtasks": {
                 "type": "array",
                 "title": "Subtasks",
@@ -89,6 +93,10 @@ TASKS_SCHEMA = {
                         "labels": {
                             "type": "string",
                             "title": "Labels (comma-separated)",
+                        },
+                        "due_date": {
+                            "type": "string",
+                            "title": "Due date (YYYY-MM-DD, can use tokens)",
                         },
                     },
                     "required": ["title"],
@@ -176,11 +184,8 @@ class Task(models.Model):
         help_text="Section ID from external service — used as column in kanban board",
     )
     completed = models.BooleanField(default=False)
-    start_date = models.DateField(
-        null=True, blank=True, help_text="Scheduling/start date for this task"
-    )
     due_date = models.DateField(
-        null=True, blank=True, help_text="Hard deadline for this task"
+        null=True, blank=True, help_text="Due date for this task"
     )
     parent_task = models.ForeignKey(
         "self",
