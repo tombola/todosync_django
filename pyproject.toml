@@ -27,3 +27,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/todosync"]
+
+[dependency-groups]
+dev = [
+    "complexipy>=5.2.0",
+]

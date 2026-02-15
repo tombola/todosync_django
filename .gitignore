@@ -52,3 +52,4 @@ htmlcov/
 # Environment variables
 .env
 .env.local
+.complexipy_cache
