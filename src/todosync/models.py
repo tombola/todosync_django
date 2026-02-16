@@ -6,9 +6,7 @@ from polymorphic.models import PolymorphicModel
 class LabelActionRule(models.Model):
     """Rule for moving completed tasks to different sections based on label"""
 
-    settings = models.ForeignKey(
-        "TaskSyncSettings", on_delete=models.CASCADE, related_name="label_action_rules"
-    )
+    settings = models.ForeignKey("TaskSyncSettings", on_delete=models.CASCADE, related_name="label_action_rules")
 
     source_section_id = models.CharField(
         max_length=100,
@@ -16,9 +14,7 @@ class LabelActionRule(models.Model):
         help_text="Todoist section ID to monitor for completed tasks with this label",
     )
 
-    label = models.CharField(
-        max_length=100, help_text="Label to match (e.g., 'harvest', 'plant')"
-    )
+    label = models.CharField(max_length=100, help_text="Label to match (e.g., 'harvest', 'plant')")
 
     destination_section_id = models.CharField(
         max_length=100,
@@ -174,9 +170,7 @@ class Task(models.Model):
         blank=True,
         help_text="Task ID from external task management service",
     )
-    title = models.CharField(
-        max_length=500, help_text="Task title as sent to external service"
-    )
+    title = models.CharField(max_length=500, help_text="Task title as sent to external service")
     todo_section_id = models.CharField(
         max_length=50,
         blank=True,
@@ -184,9 +178,7 @@ class Task(models.Model):
         help_text="Section ID from external service — used as column in kanban board",
     )
     completed = models.BooleanField(default=False)
-    due_date = models.DateField(
-        null=True, blank=True, help_text="Due date for this task"
-    )
+    due_date = models.DateField(null=True, blank=True, help_text="Due date for this task")
     parent_task = models.ForeignKey(
         "self",
         on_delete=models.CASCADE,
@@ -215,6 +207,8 @@ class BaseParentTask(Task):
     field values serve as token values for substitution in task titles.
     """
 
+    label_section_map = {}
+
     template = models.ForeignKey(
         BaseTaskGroupTemplate,
         on_delete=models.SET_NULL,
@@ -239,10 +233,7 @@ class BaseParentTask(Task):
 
     def get_token_values(self):
         """Return dict mapping token field names to their values."""
-        return {
-            field_name: getattr(self, field_name, "")
-            for field_name in self.get_token_field_names()
-        }
+        return {field_name: getattr(self, field_name, "") for field_name in self.get_token_field_names()}
 
     def get_parent_task_title(self):
         """Return the title for the Todoist parent task. Override in subclasses."""

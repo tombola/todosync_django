@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 from pydantic import ValidationError
 from todoist_api_python.api import TodoistAPI
 
-from .models import Task
+from .models import BaseParentTask, Task
 from .schemas import TodoistWebhookPayload, WebhookEventType
 from .utils import substitute_tokens
 
@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 
 def get_api_client():
     """Return a configured TodoistAPI client, or None if no token is set."""
-    api_token = getattr(settings, 'TODOIST_API_TOKEN', None)
+    api_token = getattr(settings, "TODOIST_API_TOKEN", None)
     if not api_token:
         return None
     return TodoistAPI(api_token)
 
 
-def create_tasks_from_template(api, template, token_values, form_description='', dry_run=False):
+def create_tasks_from_template(api, template, token_values, form_description="", dry_run=False):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
@@ -47,7 +47,9 @@ def create_tasks_from_template(api, template, token_values, form_description='',
     """
     logger.info(
         "Creating tasks from template: '%s', tokens=%s, project=%s",
-        template.title, token_values, template.get_effective_project_id(),
+        template.title,
+        token_values,
+        template.get_effective_project_id(),
     )
 
     if dry_run:
@@ -59,7 +61,7 @@ def create_tasks_from_template(api, template, token_values, form_description='',
     if not parent_task_model:
         raise ValueError("Template has no task_type configured")
 
-    instance_kwargs = {'template': template}
+    instance_kwargs = {"template": template}
     for field_name in parent_task_model.get_token_field_names():
         if field_name in token_values:
             instance_kwargs[field_name] = token_values[field_name]
@@ -82,21 +84,22 @@ def create_tasks_from_template(api, template, token_values, form_description='',
         form_desc = substitute_tokens(form_description, token_values)
         description_parts.append(form_desc)
 
-    parent_description = '\n\n'.join(description_parts) if description_parts else ''
+    parent_description = "\n\n".join(description_parts) if description_parts else ""
 
     # Build Todoist task params
-    task_params = {'content': parent_title}
+    task_params = {"content": parent_title}
     if parent_description:
-        task_params['description'] = parent_description
+        task_params["description"] = parent_description
 
     project_id = template.get_effective_project_id()
     if project_id:
-        task_params['project_id'] = project_id
+        task_params["project_id"] = project_id
 
     task_count = 0
 
     if dry_run:
         import random
+
         logger.debug("Dry run: parent task: '%s'", parent_title)
         if parent_description:
             logger.debug("Dry run: description: %s", parent_description)
@@ -121,29 +124,39 @@ def create_tasks_from_template(api, template, token_values, form_description='',
         parent_task_instance.save()
 
     # Create child tasks from template
-    for task_block in (template.tasks or []):
+    for task_block in template.tasks or []:
         task_count += _create_task_recursive(
-            api, task_block, token_values,
+            api,
+            task_block,
+            token_values,
             parent_todo_id=parent_todo_id,
             parent_task_record=None,
             dry_run=dry_run,
         )
 
     logger.info(
-        "Task group complete: template='%s', total_tasks=%d", template.title, task_count,
+        "Task group complete: template='%s', total_tasks=%d",
+        template.title,
+        task_count,
     )
 
     if dry_run:
         logger.debug("Dry run: total tasks: %d", task_count)
 
     return {
-        'parent_task_instance': parent_task_instance,
-        'task_count': task_count,
+        "parent_task_instance": parent_task_instance,
+        "task_count": task_count,
     }
 
 
-def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
-                           parent_task_record=None, dry_run=False):
+def _create_task_recursive(
+    api,
+    task_block,
+    token_values,
+    parent_todo_id=None,
+    parent_task_record=None,
+    dry_run=False,
+):
     """Recursively create a task and its subtasks.
 
     Args:
@@ -157,31 +170,32 @@ def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
     Returns:
         Count of tasks created.
     """
-    title = substitute_tokens(task_block['title'], token_values)
+    title = substitute_tokens(task_block["title"], token_values)
 
     labels = []
-    if task_block.get('labels'):
-        labels = [label.strip() for label in task_block['labels'].split(',') if label.strip()]
+    if task_block.get("labels"):
+        labels = [label.strip() for label in task_block["labels"].split(",") if label.strip()]
 
-    due_date_str = ''
-    if task_block.get('due_date'):
-        due_date_str = substitute_tokens(task_block['due_date'], token_values)
+    due_date_str = ""
+    if task_block.get("due_date"):
+        due_date_str = substitute_tokens(task_block["due_date"], token_values)
 
-    task_params = {'content': title}
+    task_params = {"content": title}
     if labels:
-        task_params['labels'] = labels
+        task_params["labels"] = labels
     if due_date_str:
-        task_params['due_date'] = due_date_str
+        task_params["due_date"] = due_date_str
     if parent_todo_id:
-        task_params['parent_id'] = parent_todo_id
+        task_params["parent_id"] = parent_todo_id
 
     count = 0
 
     if dry_run:
         import random
+
         logger.debug("Dry run: task: '%s'", title)
         if labels:
-            logger.debug("Dry run: labels: %s", ', '.join(labels))
+            logger.debug("Dry run: labels: %s", ", ".join(labels))
         created_todo_id = f"dry_run_{random.randint(1000, 9999)}"
         count += 1
     else:
@@ -197,22 +211,24 @@ def _create_task_recursive(api, task_block, token_values, parent_todo_id=None,
 
     # Create Task record (parent_task links to either the parent Task or None for top-level)
     task_kwargs = {
-        'parent_task': parent_task_record,
-        'todo_id': created_todo_id,
-        'title': title,
+        "parent_task": parent_task_record,
+        "todo_id": created_todo_id,
+        "title": title,
     }
     if due_date_str:
-        task_kwargs['due_date'] = date.fromisoformat(due_date_str)
+        task_kwargs["due_date"] = date.fromisoformat(due_date_str)
 
     task_record = None
     if not dry_run:
         task_record = Task.objects.create(**task_kwargs)
 
     # Recurse into subtasks
-    if task_block.get('subtasks'):
-        for subtask_data in task_block['subtasks']:
+    if task_block.get("subtasks"):
+        for subtask_data in task_block["subtasks"]:
             count += _create_task_recursive(
-                api, subtask_data, token_values,
+                api,
+                subtask_data,
+                token_values,
                 parent_todo_id=created_todo_id,
                 parent_task_record=task_record if not dry_run else None,
                 dry_run=dry_run,
@@ -226,14 +242,52 @@ def _verify_webhook_signature(request):
 
     Returns True if TODOIST_WEBHOOK_SECRET is not configured (verification disabled).
     """
-    secret = getattr(settings, 'TODOIST_WEBHOOK_SECRET', None)
+    secret = getattr(settings, "TODOIST_WEBHOOK_SECRET", None)
     if not secret:
         return True
 
-    signature = request.headers.get('X-Todoist-Hmac-SHA256', '')
+    signature = request.headers.get("X-Todoist-Hmac-SHA256", "")
     digest = hmac.new(secret.encode(), request.body, hashlib.sha256).digest()
     expected = base64.b64encode(digest).decode()
     return hmac.compare_digest(signature, expected)
+
+
+def _move_task_by_label(task, item):
+    """Move a completed task to a section based on its label and the parent's label_section_map."""
+    parent = task.parent_task
+    if not parent:
+        return
+
+    try:
+        base_parent = parent.baseparenttask
+    except BaseParentTask.DoesNotExist:
+        return
+
+    if not base_parent.template:
+        return
+
+    model_class = base_parent.template.get_parent_task_model()
+    if not model_class:
+        return
+
+    label_section_map = getattr(model_class, "label_section_map", {})
+    if not label_section_map:
+        return
+
+    for label in item.labels:
+        section_id = label_section_map.get(label)
+        if section_id:
+            api = get_api_client()
+            if api:
+                api.move_task(task_id=item.id, section_id=section_id)
+                logger.info(
+                    "Moved task '%s' (%s) to section %s (label: %s)",
+                    item.content,
+                    item.id,
+                    section_id,
+                    label,
+                )
+            return
 
 
 @csrf_exempt
@@ -262,36 +316,51 @@ def todoist_webhook(request):
     try:
         task = Task.objects.get(todo_id=item.id)
     except Task.DoesNotExist:
-        logger.info("Webhook %s: item '%s' (%s) not tracked, ignoring", event, item.content, item.id)
+        logger.info(
+            "Webhook %s: item '%s' (%s) not tracked, ignoring",
+            event,
+            item.content,
+            item.id,
+        )
         return HttpResponse(status=200)
 
     update_fields = []
 
     if event in (WebhookEventType.ITEM_COMPLETED, WebhookEventType.ITEM_DELETED):
         task.completed = True
-        update_fields.append('completed')
+        update_fields.append("completed")
+
+        if event == WebhookEventType.ITEM_COMPLETED and item.labels:
+            _move_task_by_label(task, item)
+
     elif event == WebhookEventType.ITEM_UNCOMPLETED:
         task.completed = False
-        update_fields.append('completed')
+        update_fields.append("completed")
     elif event in (WebhookEventType.ITEM_UPDATED, WebhookEventType.ITEM_ADDED):
         if item.checked != task.completed:
             task.completed = item.checked
-            update_fields.append('completed')
+            update_fields.append("completed")
 
         # Sync due_date from Todoist's due.date
         new_due = date.fromisoformat(item.due.date[:10]) if item.due else None
         if new_due != task.due_date:
             task.due_date = new_due
-            update_fields.append('due_date')
+            update_fields.append("due_date")
 
     # Sync section changes for any event that carries section_id
     if item.section_id is not None and item.section_id != task.todo_section_id:
         task.todo_section_id = item.section_id
-        update_fields.append('todo_section_id')
+        update_fields.append("todo_section_id")
 
     if update_fields:
         task.save(update_fields=update_fields)
-        logger.info("Webhook %s: updated task '%s' (%s) (fields: %s)", event, item.content, item.id, update_fields)
+        logger.info(
+            "Webhook %s: updated task '%s' (%s) (fields: %s)",
+            event,
+            item.content,
+            item.id,
+            update_fields,
+        )
     else:
         logger.debug("Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id)
 

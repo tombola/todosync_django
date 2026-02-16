@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.test import Client
@@ -58,10 +59,12 @@ def test_rejects_invalid_json(client):
 
 
 def test_rejects_unknown_event_type(client):
-    payload = json.dumps({
-        "event_name": "note:added",
-        "event_data": {"id": "x", "content": "x"},
-    })
+    payload = json.dumps(
+        {
+            "event_name": "note:added",
+            "event_data": {"id": "x", "content": "x"},
+        }
+    )
     response = client.post(
         WEBHOOK_URL,
         data=payload,
@@ -203,3 +206,47 @@ def test_hmac_skipped_when_no_secret(client, tracked_task, settings):
     assert response.status_code == 200
     tracked_task.refresh_from_db()
     assert tracked_task.completed is True
+
+
+# -- label-based section move on completion --
+
+
+@pytest.fixture
+def crop_task_with_child(db):
+    """A CropTask parent with a child Task matching the fixture todo_id."""
+    from tasks.models import CropTaskGroupTemplate, CropTask
+
+    template = CropTaskGroupTemplate.objects.create(title="Sow template")
+    parent = CropTask.objects.create(
+        template=template,
+        title="TOM-001 - Tomato",
+        todo_id="PARENT123",
+        crop="Tomato",
+        sku="TOM-001",
+        variety_name="Roma",
+        bed="B1",
+    )
+    child = Task.objects.create(
+        todo_id="ABC123",
+        title="Sow tomatoes",
+        parent_task=parent,
+        completed=False,
+    )
+    return parent, child
+
+
+def test_completed_task_with_sow_label_moves_to_propagation(client, crop_task_with_child):
+    """Completing a task with label 'sow' moves it to the propagation section."""
+    from tasks.models import SECTIONS
+
+    body = _load_fixture("item_completed.json")
+    mock_api = MagicMock()
+
+    with patch("todosync.todoist_api.get_api_client", return_value=mock_api):
+        response = client.post(WEBHOOK_URL, data=body, content_type="application/json")
+
+    assert response.status_code == 200
+    mock_api.move_task.assert_called_once_with(
+        task_id="ABC123",
+        section_id=SECTIONS["propagation"],
+    )
