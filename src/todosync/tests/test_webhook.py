@@ -229,7 +229,6 @@ def crop_task_with_child(db):
     child = Task.objects.create(
         todo_id="ABC123",
         title="Sow tomatoes",
-        parent_task=parent,
         completed=False,
     )
     return parent, child
@@ -247,6 +246,6 @@ def test_completed_task_with_sow_label_moves_to_propagation(client, crop_task_wi
 
     assert response.status_code == 200
     mock_api.move_task.assert_called_once_with(
-        task_id="ABC123",
+        task_id="PARENT123",
         section_id=SECTIONS["propagation"],
     )

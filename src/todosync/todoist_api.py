@@ -253,9 +253,13 @@ def _verify_webhook_signature(request):
 
 
 def _move_task_by_label(task, item):
-    """Move a completed task to a section based on its label and the parent's label_section_map."""
-    parent = task.parent_task
-    if not parent:
+    """Move the parent task to a section based on the child's label and the parent's label_section_map."""
+    if not item.parent_id:
+        return
+
+    try:
+        parent = Task.objects.get(todo_id=item.parent_id)
+    except Task.DoesNotExist:
         return
 
     try:
@@ -279,11 +283,11 @@ def _move_task_by_label(task, item):
         if section_id:
             api = get_api_client()
             if api:
-                api.move_task(task_id=item.id, section_id=section_id)
+                api.move_task(task_id=item.parent_id, section_id=section_id)
                 logger.info(
-                    "Moved task '%s' (%s) to section %s (label: %s)",
-                    item.content,
-                    item.id,
+                    "Moved parent task '%s' (%s) to section %s (child label: %s)",
+                    parent.title,
+                    item.parent_id,
                     section_id,
                     label,
                 )
