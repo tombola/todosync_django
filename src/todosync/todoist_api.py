@@ -124,10 +124,11 @@ def create_tasks_from_template(api, template, token_values, form_description="",
         parent_task_instance.save()
 
     # Create child tasks from template
-    for task_block in template.tasks or []:
-        task_count += _create_task_recursive(
+    top_level_tasks = template.template_tasks.filter(parent__isnull=True).order_by("order", "pk")
+    for template_task in top_level_tasks:
+        task_count += _create_task_from_template_task(
             api,
-            task_block,
+            template_task,
             token_values,
             parent_todo_id=parent_todo_id,
             parent_task_record=None,
@@ -149,19 +150,19 @@ def create_tasks_from_template(api, template, token_values, form_description="",
     }
 
 
-def _create_task_recursive(
+def _create_task_from_template_task(
     api,
-    task_block,
+    template_task,
     token_values,
     parent_todo_id=None,
     parent_task_record=None,
     dry_run=False,
 ):
-    """Recursively create a task and its subtasks.
+    """Create a Todoist task from a TemplateTask instance, then recurse into subtasks.
 
     Args:
         api: TodoistAPI instance (can be None if dry_run=True)
-        task_block: Task dict from template JSON (title, labels, subtasks)
+        template_task: TemplateTask model instance
         token_values: Dict of token replacements
         parent_todo_id: External parent task ID
         parent_task_record: Parent Task instance, or None for top-level tasks
@@ -170,15 +171,15 @@ def _create_task_recursive(
     Returns:
         Count of tasks created.
     """
-    title = substitute_tokens(task_block["title"], token_values)
+    title = substitute_tokens(template_task.title, token_values)
 
     labels = []
-    if task_block.get("labels"):
-        labels = [label.strip() for label in task_block["labels"].split(",") if label.strip()]
+    if template_task.labels:
+        labels = [label.strip() for label in template_task.labels.split(",") if label.strip()]
 
     due_date_str = ""
-    if task_block.get("due_date"):
-        due_date_str = substitute_tokens(task_block["due_date"], token_values)
+    if template_task.due_date:
+        due_date_str = substitute_tokens(template_task.due_date, token_values)
 
     task_params = {"content": title}
     if labels:
@@ -223,16 +224,15 @@ def _create_task_recursive(
         task_record = Task.objects.create(**task_kwargs)
 
     # Recurse into subtasks
-    if task_block.get("subtasks"):
-        for subtask_data in task_block["subtasks"]:
-            count += _create_task_recursive(
-                api,
-                subtask_data,
-                token_values,
-                parent_todo_id=created_todo_id,
-                parent_task_record=task_record if not dry_run else None,
-                dry_run=dry_run,
-            )
+    for child in template_task.subtasks.order_by("order", "pk"):
+        count += _create_task_from_template_task(
+            api,
+            child,
+            token_values,
+            parent_todo_id=created_todo_id,
+            parent_task_record=task_record if not dry_run else None,
+            dry_run=dry_run,
+        )
 
     return count
 

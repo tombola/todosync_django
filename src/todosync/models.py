@@ -1,5 +1,4 @@
 from django.db import models
-from django_jsonform.models.fields import JSONField
 from polymorphic.models import PolymorphicModel
 
 
@@ -56,54 +55,6 @@ class TaskSyncSettings(models.Model):
         return obj
 
 
-TASKS_SCHEMA = {
-    "type": "array",
-    "title": "Tasks",
-    "items": {
-        "type": "object",
-        "title": "Task",
-        "properties": {
-            "title": {
-                "type": "string",
-                "title": "Task title (can use tokens like {SKU})",
-            },
-            "labels": {
-                "type": "string",
-                "title": "Labels (comma-separated)",
-            },
-            "due_date": {
-                "type": "string",
-                "title": "Due date (YYYY-MM-DD, can use tokens)",
-            },
-            "subtasks": {
-                "type": "array",
-                "title": "Subtasks",
-                "items": {
-                    "type": "object",
-                    "title": "Subtask",
-                    "properties": {
-                        "title": {
-                            "type": "string",
-                            "title": "Subtask title (can use tokens)",
-                        },
-                        "labels": {
-                            "type": "string",
-                            "title": "Labels (comma-separated)",
-                        },
-                        "due_date": {
-                            "type": "string",
-                            "title": "Due date (YYYY-MM-DD, can use tokens)",
-                        },
-                    },
-                    "required": ["title"],
-                },
-            },
-        },
-        "required": ["title"],
-    },
-}
-
-
 class BaseTaskGroupTemplate(PolymorphicModel):
     """Task group template for defining reusable task structures.
 
@@ -123,13 +74,6 @@ class BaseTaskGroupTemplate(PolymorphicModel):
     description = models.TextField(
         blank=True,
         help_text="Description for this template (can use tokens). Appended to parent task description.",
-    )
-
-    tasks = JSONField(
-        schema=TASKS_SCHEMA,
-        blank=True,
-        default=list,
-        help_text="Task definitions with token placeholders.",
     )
 
     class Meta:
@@ -156,6 +100,51 @@ class BaseTaskGroupTemplate(PolymorphicModel):
         if model:
             return model.get_token_field_names()
         return []
+
+
+class TemplateTask(models.Model):
+    """A task definition within a template. Supports one level of nesting via parent FK."""
+
+    template = models.ForeignKey(
+        BaseTaskGroupTemplate,
+        on_delete=models.CASCADE,
+        related_name="template_tasks",
+        help_text="Template this task belongs to",
+    )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="subtasks",
+        help_text="Parent task (null for top-level tasks)",
+    )
+    title = models.CharField(
+        max_length=500,
+        help_text="Task title (can use tokens like {sku})",
+    )
+    labels = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Labels (comma-separated)",
+    )
+    due_date = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Due date (YYYY-MM-DD, can use tokens)",
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Sort order within the parent or template",
+    )
+
+    class Meta:
+        verbose_name = "Template Task"
+        verbose_name_plural = "Template Tasks"
+        ordering = ["order", "pk"]
+
+    def __str__(self):
+        return self.title
 
 
 class Task(models.Model):
