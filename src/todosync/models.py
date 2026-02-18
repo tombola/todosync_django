@@ -128,10 +128,10 @@ class TemplateTask(models.Model):
         blank=True,
         help_text="Labels (comma-separated)",
     )
-    due_date = models.CharField(
-        max_length=100,
+    due_date = models.DateField(
+        null=True,
         blank=True,
-        help_text="Due date (YYYY-MM-DD, can use tokens)",
+        help_text="Due date for this task",
     )
     order = models.PositiveIntegerField(
         default=0,

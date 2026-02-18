@@ -179,13 +179,13 @@ def _create_task_from_template_task(
 
     due_date_str = ""
     if template_task.due_date:
-        due_date_str = substitute_tokens(template_task.due_date, token_values)
+        due_date_str = template_task.due_date.isoformat()
 
     task_params = {"content": title}
     if labels:
         task_params["labels"] = labels
-    if due_date_str:
-        task_params["due_date"] = due_date_str
+    # if due_date_str:
+    task_params["due_date"] = template_task.due_date
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
 
