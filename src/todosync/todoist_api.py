@@ -32,9 +32,7 @@ def get_api_client():
     return TodoistAPI(api_token)
 
 
-def create_tasks_from_template(
-    api, template, token_values, form_description="", dry_run=False
-):
+def create_tasks_from_template(api, template, token_values, form_description="", dry_run=False):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
@@ -125,17 +123,14 @@ def create_tasks_from_template(
     if not dry_run:
         parent_task_instance.save()
 
-    # Create child tasks from template
-    top_level_tasks = template.template_tasks.filter(parent__isnull=True).order_by(
-        "order", "pk"
-    )
-    for template_task in top_level_tasks:
+    # Create child tasks from template (flat — no subtask nesting)
+    for template_task in template.template_tasks.order_by("order", "pk"):
         task_count += _create_task_from_template_task(
             api,
             template_task,
             token_values,
             parent_todo_id=parent_todo_id,
-            parent_task_record=None,
+            parent_task_instance=parent_task_instance if not dry_run else None,
             dry_run=dry_run,
         )
 
@@ -159,29 +154,27 @@ def _create_task_from_template_task(
     template_task,
     token_values,
     parent_todo_id=None,
-    parent_task_record=None,
+    parent_task_instance=None,
     dry_run=False,
 ):
-    """Create a Todoist task from a TemplateTask instance, then recurse into subtasks.
+    """Create a Todoist task from a TemplateTask instance.
 
     Args:
         api: TodoistAPI instance (can be None if dry_run=True)
         template_task: TemplateTask model instance
         token_values: Dict of token replacements
-        parent_todo_id: External parent task ID
-        parent_task_record: Parent Task instance, or None for top-level tasks
+        parent_todo_id: External parent task ID (for Todoist nesting)
+        parent_task_instance: BaseParentTask instance that owns this task
         dry_run: If True, skip API calls and DB writes; log planned actions at DEBUG level
 
     Returns:
-        Count of tasks created.
+        Count of tasks created (always 1).
     """
     title = substitute_tokens(template_task.title, token_values)
 
     labels = []
     if template_task.labels:
-        labels = [
-            label.strip() for label in template_task.labels.split(",") if label.strip()
-        ]
+        labels = [label.strip() for label in template_task.labels.split(",") if label.strip()]
 
     due_date_str = ""
     if template_task.due_date:
@@ -190,12 +183,9 @@ def _create_task_from_template_task(
     task_params = {"content": title}
     if labels:
         task_params["labels"] = labels
-    # if due_date_str:
     task_params["due_date"] = template_task.due_date
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
-
-    count = 0
 
     if dry_run:
         import random
@@ -204,43 +194,28 @@ def _create_task_from_template_task(
         if labels:
             logger.debug("Dry run: labels: %s", ", ".join(labels))
         created_todo_id = f"dry_run_{random.randint(1000, 9999)}"
-        count += 1
     else:
         try:
-            logger.info("Creating subtask: '%s' (parent=%s)", title, parent_todo_id)
+            logger.info("Creating child task: '%s' (parent=%s)", title, parent_todo_id)
             created_task = api.add_task(**task_params)
             created_todo_id = created_task.id
-            logger.info("Subtask created: '%s', todo_id=%s", title, created_todo_id)
+            logger.info("Child task created: '%s', todo_id=%s", title, created_todo_id)
         except Exception:
-            logger.exception("Failed to create subtask: '%s'", title)
+            logger.exception("Failed to create child task: '%s'", title)
             raise
-        count += 1
 
-    # Create Task record (parent_task links to either the parent Task or None for top-level)
     task_kwargs = {
-        "parent_task": parent_task_record,
+        "parent_task": parent_task_instance,
         "todo_id": created_todo_id,
         "title": title,
     }
     if due_date_str:
         task_kwargs["due_date"] = date.fromisoformat(due_date_str)
 
-    task_record = None
     if not dry_run:
-        task_record = Task.objects.create(**task_kwargs)
+        Task.objects.create(**task_kwargs)
 
-    # Recurse into subtasks
-    for child in template_task.subtasks.order_by("order", "pk"):
-        count += _create_task_from_template_task(
-            api,
-            child,
-            token_values,
-            parent_todo_id=created_todo_id,
-            parent_task_record=task_record if not dry_run else None,
-            dry_run=dry_run,
-        )
-
-    return count
+    return 1
 
 
 def _verify_webhook_signature(request):
@@ -372,8 +347,6 @@ def todoist_webhook(request):
             update_fields,
         )
     else:
-        logger.debug(
-            "Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id
-        )
+        logger.debug("Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id)
 
     return HttpResponse(status=200)

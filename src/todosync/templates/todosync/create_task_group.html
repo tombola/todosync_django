@@ -95,17 +95,8 @@
                     <span class="task-labels"><em>({{ task.labels }})</em></span>
                     {% endif %}
 
-                    {% if task.subtasks %}
-                    <ul class="subtask-list">
-                        {% for subtask in task.subtasks %}
-                        <li class="subtask-item">
-                            <span x-text="replace('{{ subtask.title|escapejs }}')">{{ subtask.title }}</span>
-                            {% if subtask.labels %}
-                            <span class="task-labels"><em>({{ subtask.labels }})</em></span>
-                            {% endif %}
-                        </li>
-                        {% endfor %}
-                    </ul>
+                    {% if task.depends_on %}
+                    <span class="task-dependency">depends on: {{ task.depends_on.title }}</span>
                     {% endif %}
                 </li>
             {% endfor %}

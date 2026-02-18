@@ -8,8 +8,14 @@ from todosync.models import Task
 
 @click.command()
 @click.option("--dry-run", is_flag=True, help="Show what would be deleted without making changes.")
-def command(dry_run):
-    """Delete all Todoist tasks referenced by Django Task records and clear their todo_id."""
+@click.option("--task-id", type=int, multiple=True, help="Django Task pk(s) to target.")
+@click.option("--todo-id", type=str, multiple=True, help="Todoist task ID(s) to target.")
+def command(dry_run, task_id, todo_id):
+    """Delete Todoist tasks referenced by Django Task records and clear their todo_id.
+
+    With no filters, targets all tasks with a todo_id. Use --task-id or --todo-id
+    (repeatable) to target specific tasks.
+    """
     console = Console()
 
     api_token = getattr(settings, "TODOIST_API_TOKEN", None)
@@ -18,6 +24,10 @@ def command(dry_run):
         raise click.Abort()
 
     tasks = Task.objects.exclude(todo_id="")
+    if task_id:
+        tasks = tasks.filter(pk__in=task_id)
+    if todo_id:
+        tasks = tasks.filter(todo_id__in=todo_id)
     count = tasks.count()
 
     if count == 0:

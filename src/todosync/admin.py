@@ -6,7 +6,7 @@ from .models import BaseParentTask, BaseTaskGroupTemplate, LabelActionRule, Task
 class TemplateTaskInline(admin.TabularInline):
     model = TemplateTask
     extra = 1
-    fields = ["title", "labels", "due_date", "parent"]
+    fields = ["title", "labels", "due_date", "depends_on"]
     ordering = ["order", "pk"]
 
 
@@ -55,9 +55,8 @@ class BaseParentTaskAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ["title", "parent_task", "todo_id", "created_at"]
-    readonly_fields = ["parent_task", "todo_id", "title", "created_at"]
-    inlines = [TaskInline]
+    list_display = ["title", "parent_task", "depends_on", "todo_id", "created_at"]
+    readonly_fields = ["parent_task", "depends_on", "todo_id", "title", "created_at"]
 
     def has_add_permission(self, request):
         return False

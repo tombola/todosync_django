@@ -103,7 +103,7 @@ class BaseTaskGroupTemplate(PolymorphicModel):
 
 
 class TemplateTask(models.Model):
-    """A task definition within a template. Supports one level of nesting via parent FK."""
+    """A task definition within a template. Tasks are flat under the template; depends_on tracks ordering."""
 
     template = models.ForeignKey(
         BaseTaskGroupTemplate,
@@ -111,13 +111,13 @@ class TemplateTask(models.Model):
         related_name="template_tasks",
         help_text="Template this task belongs to",
     )
-    parent = models.ForeignKey(
+    depends_on = models.ForeignKey(
         "self",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="subtasks",
-        help_text="Parent task (null for top-level tasks)",
+        related_name="dependents",
+        help_text="Task that must be completed before this one",
     )
     title = models.CharField(
         max_length=500,
@@ -148,10 +148,10 @@ class TemplateTask(models.Model):
 
 
 class Task(models.Model):
-    """Represents a task in the Todoist hierarchy.
+    """Represents a task synced with an external service (e.g. Todoist).
 
-    Used for both child tasks and subtasks — nesting is achieved via the
-    self-referential parent_task FK.
+    All tasks belong to a BaseParentTask via the parent_task FK.
+    Tasks are flat — no subtask nesting. Use depends_on to express ordering.
     """
 
     todo_id = models.CharField(
@@ -169,12 +169,20 @@ class Task(models.Model):
     completed = models.BooleanField(default=False)
     due_date = models.DateField(null=True, blank=True, help_text="Due date for this task")
     parent_task = models.ForeignKey(
-        "self",
+        "BaseParentTask",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name="subtasks",
-        help_text="Parent task (null for top-level tasks under a BaseParentTask)",
+        related_name="child_tasks",
+        help_text="The parent task group this task belongs to",
+    )
+    depends_on = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="dependents",
+        help_text="Task that must be completed before this one",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
