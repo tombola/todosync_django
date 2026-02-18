@@ -32,7 +32,9 @@ def get_api_client():
     return TodoistAPI(api_token)
 
 
-def create_tasks_from_template(api, template, token_values, form_description="", dry_run=False):
+def create_tasks_from_template(
+    api, template, token_values, form_description="", dry_run=False
+):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
@@ -124,7 +126,9 @@ def create_tasks_from_template(api, template, token_values, form_description="",
         parent_task_instance.save()
 
     # Create child tasks from template
-    top_level_tasks = template.template_tasks.filter(parent__isnull=True).order_by("order", "pk")
+    top_level_tasks = template.template_tasks.filter(parent__isnull=True).order_by(
+        "order", "pk"
+    )
     for template_task in top_level_tasks:
         task_count += _create_task_from_template_task(
             api,
@@ -175,7 +179,9 @@ def _create_task_from_template_task(
 
     labels = []
     if template_task.labels:
-        labels = [label.strip() for label in template_task.labels.split(",") if label.strip()]
+        labels = [
+            label.strip() for label in template_task.labels.split(",") if label.strip()
+        ]
 
     due_date_str = ""
     if template_task.due_date:
@@ -366,6 +372,8 @@ def todoist_webhook(request):
             update_fields,
         )
     else:
-        logger.debug("Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id)
+        logger.debug(
+            "Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id
+        )
 
     return HttpResponse(status=200)
