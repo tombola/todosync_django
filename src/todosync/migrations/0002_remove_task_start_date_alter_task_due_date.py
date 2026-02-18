@@ -4,19 +4,18 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('todosync', '0001_initial'),
+        ("todosync", "0001_initial"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='task',
-            name='start_date',
+            model_name="task",
+            name="start_date",
         ),
         migrations.AlterField(
-            model_name='task',
-            name='due_date',
-            field=models.DateField(blank=True, help_text='Due date for this task', null=True),
+            model_name="task",
+            name="due_date",
+            field=models.DateField(blank=True, help_text="Due date for this task", null=True),
         ),
     ]

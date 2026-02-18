@@ -26,9 +26,7 @@ def command(webhook_id):
         console.print("[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.", style="bold")
         raise click.Abort()
     if not client_id or not client_secret:
-        console.print(
-            "[red]Error:[/red] TODOIST_CLIENT_ID and TODOIST_CLIENT_SECRET are required.", style="bold"
-        )
+        console.print("[red]Error:[/red] TODOIST_CLIENT_ID and TODOIST_CLIENT_SECRET are required.", style="bold")
         console.print("Create a Todoist app at https://developer.todoist.com/appconsole.html")
         raise click.Abort()
 
