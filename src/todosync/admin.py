@@ -36,7 +36,7 @@ class TaskInline(admin.TabularInline):
     model = Task
     fk_name = "parent_task"
     extra = 0
-    readonly_fields = ["todo_id", "title", "created_at"]
+    readonly_fields = ["todo_id", "title", "template_task", "created_at"]
 
     def has_add_permission(self, request, obj=None):
         return False
@@ -55,8 +55,8 @@ class BaseParentTaskAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ["title", "parent_task", "depends_on", "todo_id", "created_at"]
-    readonly_fields = ["parent_task", "depends_on", "todo_id", "title", "created_at"]
+    list_display = ["title", "parent_task", "template_task", "depends_on", "todo_id", "created_at"]
+    readonly_fields = ["parent_task", "template_task", "depends_on", "todo_id", "title", "created_at"]
 
     def has_add_permission(self, request):
         return False

@@ -7,7 +7,9 @@ from todosync.models import BaseParentTask, Task
 @click.command()
 @click.option("--dry-run", is_flag=True, help="Show what would be deleted without making changes.")
 @click.option("--template-id", type=int, default=None, help="Only delete tasks from this template (by pk).")
-@click.option("--template-name", type=str, default=None, help="Only delete tasks from this template (by title, case-insensitive).")
+@click.option(
+    "--template-name", type=str, default=None, help="Only delete tasks from this template (by title, case-insensitive)."
+)
 def command(dry_run, template_id, template_name):
     """Delete all Django Task and BaseParentTask records. Templates are not affected.
 
@@ -48,7 +50,9 @@ def command(dry_run, template_id, template_name):
 
         console.print(f"\nTotal: [bold]{parent_count}[/bold] parent task(s), [bold]{child_count}[/bold] child task(s)")
     else:
-        console.print(f"Found [bold]{parent_count}[/bold] parent task(s), [bold]{child_count}[/bold] child task(s)", end="")
+        console.print(
+            f"Found [bold]{parent_count}[/bold] parent task(s), [bold]{child_count}[/bold] child task(s)", end=""
+        )
         if orphan_count:
             console.print(f", [bold]{orphan_count}[/bold] orphan task(s)")
         else:

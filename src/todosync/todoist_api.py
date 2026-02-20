@@ -206,6 +206,7 @@ def _create_task_from_template_task(
 
     task_kwargs = {
         "parent_task": parent_task_instance,
+        "template_task": template_task,
         "todo_id": created_todo_id,
         "title": title,
     }
