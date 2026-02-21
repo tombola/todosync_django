@@ -5,7 +5,7 @@ description = "Reusable Django package for Todoist task management integration"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "django>=5.0",
+    "django>=6.0",
     "todoist-api-python>=3.1.0",
     "django-polymorphic>=4.0",
     "django-click>=2.4.0",
