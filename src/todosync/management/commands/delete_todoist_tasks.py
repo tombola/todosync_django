@@ -39,7 +39,7 @@ def command(dry_run, task_id, todo_id):
     if dry_run:
         for task in tasks:
             console.print(f"  Would delete Todoist task [dim]{task.todo_id}[/dim] — {task.title}")
-        console.print(f"\n[yellow]Dry run — no changes made.[/yellow]")
+        console.print("\n[yellow]Dry run — no changes made.[/yellow]")
         return
 
     if not click.confirm(f"Delete {count} task(s) from Todoist and clear their todo_id?"):

@@ -7,17 +7,17 @@ Uses TODOIST_TEST_API_TOKEN and TODOIST_TEST_PROJECT from environment.
 import os
 import sys
 from dotenv import load_dotenv
+import django
+from todoist_api_python.api import TodoistAPI
 
 # Load environment variables
 load_dotenv()
 
 # Setup Django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "taskplanner.settings.dev")
-import django
 
 django.setup()
 
-from todoist_api_python.api import TodoistAPI
 
 API_TOKEN = os.getenv("TODOIST_TEST_API_TOKEN")
 PROJECT_ID = os.getenv("TODOIST_TEST_PROJECT")
