@@ -7,12 +7,12 @@ requires-python = ">=3.11"
 dependencies = [
     "django>=5.0",
     "todoist-api-python>=3.1.0",
-    "django-jsonform>=2.22.0",
     "django-polymorphic>=4.0",
     "django-click>=2.4.0",
     "rich>=14.0.0",
     "pydantic>=2.0",
     "requests>=2.28.0",
+    "dotenv>=0.9.9",
 ]
 
 [project.optional-dependencies]

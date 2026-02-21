@@ -1,5 +1,4 @@
 from django.db import models
-from django_jsonform.models.fields import JSONField
 from polymorphic.models import PolymorphicModel
 
 
@@ -56,54 +55,6 @@ class TaskSyncSettings(models.Model):
         return obj
 
 
-TASKS_SCHEMA = {
-    "type": "array",
-    "title": "Tasks",
-    "items": {
-        "type": "object",
-        "title": "Task",
-        "properties": {
-            "title": {
-                "type": "string",
-                "title": "Task title (can use tokens like {SKU})",
-            },
-            "labels": {
-                "type": "string",
-                "title": "Labels (comma-separated)",
-            },
-            "due_date": {
-                "type": "string",
-                "title": "Due date (YYYY-MM-DD, can use tokens)",
-            },
-            "subtasks": {
-                "type": "array",
-                "title": "Subtasks",
-                "items": {
-                    "type": "object",
-                    "title": "Subtask",
-                    "properties": {
-                        "title": {
-                            "type": "string",
-                            "title": "Subtask title (can use tokens)",
-                        },
-                        "labels": {
-                            "type": "string",
-                            "title": "Labels (comma-separated)",
-                        },
-                        "due_date": {
-                            "type": "string",
-                            "title": "Due date (YYYY-MM-DD, can use tokens)",
-                        },
-                    },
-                    "required": ["title"],
-                },
-            },
-        },
-        "required": ["title"],
-    },
-}
-
-
 class BaseTaskGroupTemplate(PolymorphicModel):
     """Task group template for defining reusable task structures.
 
@@ -123,13 +74,6 @@ class BaseTaskGroupTemplate(PolymorphicModel):
     description = models.TextField(
         blank=True,
         help_text="Description for this template (can use tokens). Appended to parent task description.",
-    )
-
-    tasks = JSONField(
-        schema=TASKS_SCHEMA,
-        blank=True,
-        default=list,
-        help_text="Task definitions with token placeholders.",
     )
 
     class Meta:
@@ -159,10 +103,10 @@ class BaseTaskGroupTemplate(PolymorphicModel):
 
 
 class Task(models.Model):
-    """Represents a task in the Todoist hierarchy.
+    """Represents a task synced with an external service (e.g. Todoist).
 
-    Used for both child tasks and subtasks — nesting is achieved via the
-    self-referential parent_task FK.
+    All tasks belong to a BaseParentTask via the parent_task FK.
+    Tasks are flat — no subtask nesting. Use depends_on to express ordering.
     """
 
     todo_id = models.CharField(
@@ -180,12 +124,28 @@ class Task(models.Model):
     completed = models.BooleanField(default=False)
     due_date = models.DateField(null=True, blank=True, help_text="Due date for this task")
     parent_task = models.ForeignKey(
-        "self",
+        "BaseParentTask",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name="subtasks",
-        help_text="Parent task (null for top-level tasks under a BaseParentTask)",
+        related_name="child_tasks",
+        help_text="The parent task group this task belongs to",
+    )
+    template_task = models.ForeignKey(
+        "TemplateTask",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_tasks",
+        help_text="The template task this was created from",
+    )
+    depends_on = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="dependents",
+        help_text="Task that must be completed before this one",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -197,6 +157,36 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class TemplateTask(Task):
+    """A task definition within a template, extending Task via multi-table inheritance.
+
+    TemplateTask instances are prototype tasks that get copied ("stamped") when a
+    template is used. They inherit all Task fields (title, due_date, depends_on, etc.)
+    and add template-specific fields (template FK, labels, order).
+    """
+
+    template = models.ForeignKey(
+        BaseTaskGroupTemplate,
+        on_delete=models.CASCADE,
+        related_name="template_tasks",
+        help_text="Template this task belongs to",
+    )
+    labels = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Labels (comma-separated)",
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Sort order within the parent or template",
+    )
+
+    class Meta:
+        verbose_name = "Template Task"
+        verbose_name_plural = "Template Tasks"
+        ordering = ["order", "pk"]
 
 
 class BaseParentTask(Task):
