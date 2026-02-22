@@ -64,14 +64,24 @@ def create_task_group(request):
                         token_values,
                         form_description,
                     )
-                    logger.info(
-                        "Task group created: template='%s', task_count=%d",
-                        template.title,
-                        result["task_count"],
-                    )
-                    messages.success(
-                        request, f"Successfully created {result['task_count']} tasks"
-                    )
+                    if result.get("queued"):
+                        logger.info(
+                            "Task group queued: template='%s' (rate-limited or queue under load)",
+                            template.title,
+                        )
+                        messages.info(
+                            request,
+                            "Task creation has been queued and will run in the background.",
+                        )
+                    else:
+                        logger.info(
+                            "Task group created: template='%s', task_count=%d",
+                            template.title,
+                            result["task_count"],
+                        )
+                        messages.success(
+                            request, f"Successfully created {result['task_count']} tasks"
+                        )
 
                 return redirect("todosync:create_task_group")
 

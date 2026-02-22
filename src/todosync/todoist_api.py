@@ -2,6 +2,10 @@
 
 All direct interaction with the Todoist API lives here. If swapping to a
 different task-management backend, this module is what gets replaced.
+
+API calls are routed through task_queue.ConditionalDispatcher, which runs
+them synchronously when the queue is healthy and falls back to background
+queuing (via huey) when rate-limited or the queue is under load.
 """
 
 import base64
@@ -15,10 +19,12 @@ from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbid
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from pydantic import ValidationError
+from requests.exceptions import HTTPError as RequestsHTTPError
 from todoist_api_python.api import TodoistAPI
 
 from .models import BaseParentTask, Task
 from .schemas import TodoistWebhookPayload, WebhookEventType
+from .task_queue import RateLimitError, dispatch_move_task
 from .utils import substitute_tokens
 
 logger = logging.getLogger(__name__)
@@ -32,18 +38,47 @@ def get_api_client():
     return TodoistAPI(api_token)
 
 
+def _call_api(fn, *args, **kwargs):
+    """Call a Todoist API function, converting HTTP 429 to RateLimitError."""
+    try:
+        return fn(*args, **kwargs)
+    except RequestsHTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 429:
+            retry_after = int(exc.response.headers.get("Retry-After", 60))
+            raise RateLimitError(
+                f"Todoist rate limit hit; retry after {retry_after}s"
+            ) from exc
+        raise
+
+
 def create_tasks_from_template(api, template, token_values, form_description="", dry_run=False):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
-        api: TodoistAPI instance (can be None if dry_run=True)
+        api: TodoistAPI instance (can be None if dry_run=True); ignored when
+             the dispatcher enqueues the call — the task re-creates it.
         template: BaseTaskGroupTemplate instance
         token_values: Dict of token replacements (field_name -> value)
         form_description: Optional description from the creation form
         dry_run: If True, skip API calls and DB writes; log planned actions at DEBUG level
 
     Returns:
-        Dict with 'parent_task_instance' and 'task_count'.
+        Dict with 'parent_task_instance', 'task_count', and optionally
+        'queued': True when the operation has been deferred to a background task.
+    """
+    if dry_run:
+        return _create_tasks_impl(api, template, token_values, form_description, dry_run=True)
+
+    from .task_queue import dispatch_create_tasks
+
+    return dispatch_create_tasks(template, token_values, form_description)
+
+
+def _create_tasks_impl(api, template, token_values, form_description="", dry_run=False):
+    """Implementation: create Todoist tasks from a template.
+
+    Called directly for dry-run mode and by the background huey task.
+    Not intended to be called from views — use create_tasks_from_template instead.
     """
     logger.info(
         "Creating tasks from template: '%s', tokens=%s, project=%s",
@@ -110,9 +145,11 @@ def create_tasks_from_template(api, template, token_values, form_description="",
     else:
         try:
             logger.info("Creating parent task: '%s'", parent_title)
-            todoist_parent = api.add_task(**task_params)
+            todoist_parent = _call_api(api.add_task, **task_params)
             parent_todo_id = todoist_parent.id
             logger.info("Parent task created: todo_id=%s", parent_todo_id)
+        except RateLimitError:
+            raise
         except Exception:
             logger.exception("Failed to create parent task: '%s'", parent_title)
             raise
@@ -197,9 +234,11 @@ def _create_task_from_template_task(
     else:
         try:
             logger.info("Creating child task: '%s' (parent=%s)", title, parent_todo_id)
-            created_task = api.add_task(**task_params)
+            created_task = _call_api(api.add_task, **task_params)
             created_todo_id = created_task.id
             logger.info("Child task created: '%s', todo_id=%s", title, created_todo_id)
+        except RateLimitError:
+            raise
         except Exception:
             logger.exception("Failed to create child task: '%s'", title)
             raise
@@ -234,8 +273,8 @@ def _verify_webhook_signature(request):
     return hmac.compare_digest(signature, expected)
 
 
-def _move_task_by_label(task, item):
-    """Move the parent task to a section based on the child's label and the parent's label_section_map."""
+def _move_task_by_label(item):
+    """Move the parent of item to a section based on item's label and the parent's label_section_map."""
     if not item.parent_id:
         return
 
@@ -263,16 +302,14 @@ def _move_task_by_label(task, item):
     for label in item.labels:
         section_id = label_section_map.get(label)
         if section_id:
-            api = get_api_client()
-            if api:
-                api.move_task(task_id=item.parent_id, section_id=section_id)
-                logger.info(
-                    "Moved parent task '%s' (%s) to section %s (child label: %s)",
-                    parent.title,
-                    item.parent_id,
-                    section_id,
-                    label,
-                )
+            dispatch_move_task(item.parent_id, section_id)
+            logger.info(
+                "Dispatched move for parent task '%s' (%s) to section %s (child label: %s)",
+                parent.title,
+                item.parent_id,
+                section_id,
+                label,
+            )
             return
 
 
@@ -317,7 +354,7 @@ def todoist_webhook(request):
         update_fields.append("completed")
 
         if event == WebhookEventType.ITEM_COMPLETED and item.labels:
-            _move_task_by_label(task, item)
+            _move_task_by_label(item)
 
     elif event == WebhookEventType.ITEM_UNCOMPLETED:
         task.completed = False
