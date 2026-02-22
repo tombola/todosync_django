@@ -1,9 +1,17 @@
 import djclick as click
+import requests.exceptions
+import stamina
 from django.conf import settings
-from todoist_api_python.api import TodoistAPI
 from rich.console import Console
+from todoist_api_python.api import TodoistAPI
 
 from todosync.models import Task
+
+
+def _is_retryable_request_error(exc: Exception) -> bool:
+    if isinstance(exc, requests.exceptions.HTTPError):
+        return exc.response.status_code >= 500 or exc.response.status_code == 429
+    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
 
 
 @click.command()
@@ -51,7 +59,9 @@ def command(dry_run, task_id, todo_id):
 
     for task in tasks:
         try:
-            api.delete_task(task_id=task.todo_id)
+            for attempt in stamina.retry_context(on=_is_retryable_request_error):
+                with attempt:
+                    api.delete_task(task_id=task.todo_id)
             console.print(f"  [green]Deleted[/green] {task.todo_id} — {task.title}")
             deleted += 1
         except Exception as e:

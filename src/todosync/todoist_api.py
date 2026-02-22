@@ -10,6 +10,8 @@ import hmac
 import logging
 from datetime import date
 
+import requests.exceptions
+import stamina
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
@@ -22,6 +24,12 @@ from .schemas import TodoistWebhookPayload, WebhookEventType
 from .utils import substitute_tokens
 
 logger = logging.getLogger(__name__)
+
+
+def _is_retryable_request_error(exc: Exception) -> bool:
+    if isinstance(exc, requests.exceptions.HTTPError):
+        return exc.response.status_code >= 500 or exc.response.status_code == 429
+    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
 
 
 def get_api_client():
@@ -110,7 +118,9 @@ def create_tasks_from_template(api, template, token_values, form_description="",
     else:
         try:
             logger.info("Creating parent task: '%s'", parent_title)
-            todoist_parent = api.add_task(**task_params)
+            for attempt in stamina.retry_context(on=_is_retryable_request_error):
+                with attempt:
+                    todoist_parent = api.add_task(**task_params)
             parent_todo_id = todoist_parent.id
             logger.info("Parent task created: todo_id=%s", parent_todo_id)
         except Exception:
@@ -197,7 +207,9 @@ def _create_task_from_template_task(
     else:
         try:
             logger.info("Creating child task: '%s' (parent=%s)", title, parent_todo_id)
-            created_task = api.add_task(**task_params)
+            for attempt in stamina.retry_context(on=_is_retryable_request_error):
+                with attempt:
+                    created_task = api.add_task(**task_params)
             created_todo_id = created_task.id
             logger.info("Child task created: '%s', todo_id=%s", title, created_todo_id)
         except Exception:
@@ -265,7 +277,9 @@ def _move_task_by_label(task, item):
         if section_id:
             api = get_api_client()
             if api:
-                api.move_task(task_id=item.parent_id, section_id=section_id)
+                for attempt in stamina.retry_context(on=_is_retryable_request_error):
+                    with attempt:
+                        api.move_task(task_id=item.parent_id, section_id=section_id)
                 logger.info(
                     "Moved parent task '%s' (%s) to section %s (child label: %s)",
                     parent.title,

@@ -214,7 +214,7 @@ def test_hmac_skipped_when_no_secret(client, tracked_task, settings):
 @pytest.fixture
 def crop_task_with_child(db):
     """A CropTask parent with a child Task matching the fixture todo_id."""
-    from tasks.models import CropTaskGroupTemplate, CropTask
+    from tasks.models import CropTask, CropTaskGroupTemplate
 
     template = CropTaskGroupTemplate.objects.create(title="Sow template")
     parent = CropTask.objects.create(
