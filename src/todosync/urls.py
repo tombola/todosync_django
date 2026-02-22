@@ -1,4 +1,5 @@
 from django.urls import path
+
 from . import views
 from .todoist_api import todoist_webhook
 
