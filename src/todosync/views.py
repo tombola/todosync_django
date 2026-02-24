@@ -5,9 +5,9 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import redirect, render
 
-from .models import BaseTaskGroupTemplate
 from .forms import BaseTaskGroupCreationForm
-from .todoist_api import get_api_client, create_tasks_from_template
+from .models import BaseTaskGroupTemplate
+from .todoist_api import create_tasks_from_template, get_api_client
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +81,19 @@ def create_task_group(request):
                         )
                     else:
                         messages.error(
-                            request, "Invalid request to task API. Please check your task template configuration."
+                            request,
+                            "Invalid request to task API. Please check your task template configuration.",
                         )
                 elif "401" in error_message or "Unauthorized" in error_message:
-                    messages.error(request, "Task API authentication failed. Please check your API token in Settings.")
+                    messages.error(
+                        request,
+                        "Task API authentication failed. Please check your API token in Settings.",
+                    )
                 elif "403" in error_message or "Forbidden" in error_message:
-                    messages.error(request, "Permission denied. Your API token may not have access to this project.")
+                    messages.error(
+                        request,
+                        "Permission denied. Your API token may not have access to this project.",
+                    )
                 else:
                     messages.error(request, f"Error creating tasks: {error_message}")
 

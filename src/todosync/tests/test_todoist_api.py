@@ -6,8 +6,9 @@ Uses TODOIST_TEST_API_TOKEN and TODOIST_TEST_PROJECT from environment.
 
 import os
 import sys
-from dotenv import load_dotenv
+
 import django
+from dotenv import load_dotenv
 from todoist_api_python.api import TodoistAPI
 
 # Load environment variables

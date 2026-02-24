@@ -1,7 +1,16 @@
-import requests
 import djclick as click
+import requests
+import requests.exceptions
+import stamina
 from django.conf import settings
 from rich.console import Console
+
+
+def _is_retryable_request_error(exc: Exception) -> bool:
+    if isinstance(exc, requests.exceptions.HTTPError):
+        return exc.response.status_code >= 500 or exc.response.status_code == 429
+    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+
 
 TODOIST_WEBHOOKS_URL = "https://api.todoist.com/sync/v9/webhooks"
 
@@ -36,16 +45,18 @@ def command(webhook_url, event_names):
     headers = {"Authorization": f"Bearer {api_token}"}
 
     for event in event_names:
-        response = requests.post(
-            TODOIST_WEBHOOKS_URL,
-            headers=headers,
-            json={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "event_name": event,
-                "url": webhook_url,
-            },
-        )
+        for attempt in stamina.retry_context(on=_is_retryable_request_error):
+            with attempt:
+                response = requests.post(
+                    TODOIST_WEBHOOKS_URL,
+                    headers=headers,
+                    json={
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "event_name": event,
+                        "url": webhook_url,
+                    },
+                )
 
         if response.status_code in (200, 201):
             webhook_id = response.json().get("id")

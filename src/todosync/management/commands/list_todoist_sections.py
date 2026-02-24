@@ -1,8 +1,16 @@
 import djclick as click
+import requests.exceptions
+import stamina
 from django.conf import settings
-from todoist_api_python.api import TodoistAPI
 from rich.console import Console
 from rich.table import Table
+from todoist_api_python.api import TodoistAPI
+
+
+def _is_retryable_request_error(exc: Exception) -> bool:
+    if isinstance(exc, requests.exceptions.HTTPError):
+        return exc.response.status_code >= 500 or exc.response.status_code == 429
+    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
 
 
 @click.command()
@@ -28,14 +36,16 @@ def command(project_id):
         console.print()
 
         # Get sections from paginator
-        sections_paginator = api.get_sections(project_id=project_id) if project_id else api.get_sections()
-        sections = []
-        for page in sections_paginator:
-            # Each page is a list of sections
-            if isinstance(page, list):
-                sections.extend(page)
-            else:
-                sections.append(page)
+        for attempt in stamina.retry_context(on=_is_retryable_request_error):
+            with attempt:
+                sections_paginator = api.get_sections(project_id=project_id) if project_id else api.get_sections()
+                sections = []
+                for page in sections_paginator:
+                    # Each page is a list of sections
+                    if isinstance(page, list):
+                        sections.extend(page)
+                    else:
+                        sections.append(page)
 
         if not sections:
             if project_id:
