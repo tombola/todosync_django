@@ -153,6 +153,11 @@ class Task(models.Model):
         help_text="Task that must be completed before this one",
     )
 
+    description = models.TextField(
+        blank=True,
+        help_text="Description for this task",
+    )
+
     tags = TaggableManager(blank=True, help_text="Tags for this task")
 
     created_at = models.DateTimeField(auto_now_add=True)
