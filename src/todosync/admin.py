@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.db import models as db_models
+from django.forms import TextInput
 
 from .models import BaseParentTask, BaseTaskGroupTemplate, LabelActionRule, Task, TaskSyncSettings, TemplateTask
 
@@ -6,8 +8,12 @@ from .models import BaseParentTask, BaseTaskGroupTemplate, LabelActionRule, Task
 class TemplateTaskInline(admin.TabularInline):
     model = TemplateTask
     extra = 1
-    fields = ["order", "title", "due_date", "depends_on"]
+    fields = ["order", "title", "description", "due_date", "depends_on"]
     ordering = ["order", "pk"]
+    formfield_overrides = {
+        db_models.PositiveIntegerField: {"widget": TextInput(attrs={"style": "width: 3em;"})},
+        db_models.TextField: {"widget": TextInput()},
+    }
 
 
 @admin.register(BaseTaskGroupTemplate)

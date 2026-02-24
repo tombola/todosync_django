@@ -181,6 +181,7 @@ def _create_task_from_template_task(
         Count of tasks created (always 1).
     """
     title = substitute_tokens(template_task.title, token_values)
+    description = substitute_tokens(template_task.description, token_values) if template_task.description else ""
 
     labels = list(template_task.tags.names())
 
@@ -189,6 +190,8 @@ def _create_task_from_template_task(
         due_date_str = template_task.due_date.isoformat()
 
     task_params = {"content": title, "order": template_task.order}
+    if description:
+        task_params["description"] = description
     if labels:
         task_params["labels"] = labels
     task_params["due_date"] = template_task.due_date
@@ -219,6 +222,7 @@ def _create_task_from_template_task(
         "template_task": template_task,
         "todo_id": created_todo_id,
         "title": title,
+        "description": description,
     }
     if due_date_str:
         task_kwargs["due_date"] = date.fromisoformat(due_date_str)
