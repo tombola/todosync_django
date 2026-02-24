@@ -1,5 +1,6 @@
 from django.db import models
 from polymorphic.models import PolymorphicModel
+from taggit.managers import TaggableManager
 
 
 class LabelActionRule(models.Model):
@@ -78,6 +79,8 @@ class BaseTaskGroupTemplate(PolymorphicModel):
         help_text="Description for this template (can use tokens). Appended to parent task description.",
     )
 
+    tags = TaggableManager(blank=True, help_text="Tags for this template")
+
     class Meta:
         verbose_name = "Task Group Template"
         verbose_name_plural = "Task Group Templates"
@@ -150,6 +153,8 @@ class Task(models.Model):
         help_text="Task that must be completed before this one",
     )
 
+    tags = TaggableManager(blank=True, help_text="Tags for this task")
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -165,8 +170,8 @@ class TemplateTask(Task):
     """A task definition within a template, extending Task via multi-table inheritance.
 
     TemplateTask instances are prototype tasks that get copied ("stamped") when a
-    template is used. They inherit all Task fields (title, due_date, depends_on, etc.)
-    and add template-specific fields (template FK, labels, order).
+    template is used. They inherit all Task fields (title, due_date, depends_on, tags, etc.)
+    and add template-specific fields (template FK, order).
     """
 
     template = models.ForeignKey(
@@ -174,11 +179,6 @@ class TemplateTask(Task):
         on_delete=models.CASCADE,
         related_name="template_tasks",
         help_text="Template this task belongs to",
-    )
-    labels = models.CharField(
-        max_length=500,
-        blank=True,
-        help_text="Labels (comma-separated)",
     )
     order = models.PositiveIntegerField(
         default=0,

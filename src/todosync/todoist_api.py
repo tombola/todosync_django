@@ -182,9 +182,7 @@ def _create_task_from_template_task(
     """
     title = substitute_tokens(template_task.title, token_values)
 
-    labels = []
-    if template_task.labels:
-        labels = [label.strip() for label in template_task.labels.split(",") if label.strip()]
+    labels = list(template_task.tags.names())
 
     due_date_str = ""
     if template_task.due_date:
@@ -226,7 +224,8 @@ def _create_task_from_template_task(
         task_kwargs["due_date"] = date.fromisoformat(due_date_str)
 
     if not dry_run:
-        Task.objects.create(**task_kwargs)
+        task_record = Task.objects.create(**task_kwargs)
+        task_record.tags.set(template_task.tags.all())
 
     return 1
 
