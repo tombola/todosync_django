@@ -188,7 +188,7 @@ def _create_task_from_template_task(
     if template_task.due_date:
         due_date_str = template_task.due_date.isoformat()
 
-    task_params = {"content": title}
+    task_params = {"content": title, "order": template_task.order}
     if labels:
         task_params["labels"] = labels
     task_params["due_date"] = template_task.due_date
