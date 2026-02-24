@@ -6,7 +6,7 @@ from .models import BaseParentTask, BaseTaskGroupTemplate, LabelActionRule, Task
 class TemplateTaskInline(admin.TabularInline):
     model = TemplateTask
     extra = 1
-    fields = ["title", "labels", "due_date", "depends_on"]
+    fields = ["order", "title", "due_date", "depends_on"]
     ordering = ["order", "pk"]
 
 
