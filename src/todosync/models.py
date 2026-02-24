@@ -65,6 +65,8 @@ class BaseTaskGroupTemplate(PolymorphicModel):
 
     title = models.CharField(max_length=255)
 
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+
     project_id = models.CharField(
         max_length=100,
         blank=True,
