@@ -31,7 +31,7 @@ def command(dry_run, task_id, todo_id):
         console.print("[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.", style="bold")
         raise click.Abort()
 
-    tasks = Task.objects.exclude(todo_id="")
+    tasks = Task.objects.exclude(todo_id="").exclude(templatetask__isnull=False)
     if task_id:
         tasks = tasks.filter(pk__in=task_id)
     if todo_id:
