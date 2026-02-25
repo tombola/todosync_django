@@ -2,7 +2,14 @@ from django.contrib import admin
 from django.db import models as db_models
 from django.forms import TextInput
 
-from .models import BaseParentTask, BaseTaskGroupTemplate, LabelActionRule, Task, TaskSyncSettings, TemplateTask
+from .models import (
+    BaseParentTask,
+    BaseTaskGroupTemplate,
+    LabelActionRule,
+    Task,
+    TaskSyncSettings,
+    TemplateTask,
+)
 
 
 class TemplateTaskInline(admin.TabularInline):
@@ -11,14 +18,16 @@ class TemplateTaskInline(admin.TabularInline):
     fields = ["order", "title", "description", "due_date", "depends_on"]
     ordering = ["order", "pk"]
     formfield_overrides = {
-        db_models.PositiveIntegerField: {"widget": TextInput(attrs={"style": "width: 3em;"})},
+        db_models.PositiveIntegerField: {
+            "widget": TextInput(attrs={"style": "width: 3em;"})
+        },
         db_models.TextField: {"widget": TextInput()},
     }
 
 
 @admin.register(BaseTaskGroupTemplate)
 class BaseTaskGroupTemplateAdmin(admin.ModelAdmin):
-    list_display = ["title", "project_id"]
+    list_display = ["title", "project_id", "created_at"]
     inlines = [TemplateTaskInline]
 
 
@@ -61,8 +70,22 @@ class BaseParentTaskAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ["title", "parent_task", "template_task", "depends_on", "todo_id", "created_at"]
-    readonly_fields = ["parent_task", "template_task", "depends_on", "todo_id", "title", "created_at"]
+    list_display = [
+        "title",
+        "parent_task",
+        "template_task",
+        "depends_on",
+        "todo_id",
+        "created_at",
+    ]
+    readonly_fields = [
+        "parent_task",
+        "template_task",
+        "depends_on",
+        "todo_id",
+        "title",
+        "created_at",
+    ]
 
     def has_add_permission(self, request):
         return False
