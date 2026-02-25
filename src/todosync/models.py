@@ -162,6 +162,11 @@ class Task(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    hide = models.BooleanField(
+        default=True,
+        help_text="If True, this task will be hidden in the external service until relevant",
+    )
+
     class Meta:
         verbose_name = "Task"
         verbose_name_plural = "Tasks"

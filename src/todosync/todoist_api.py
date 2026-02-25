@@ -224,12 +224,28 @@ def _create_task_from_template_task(
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
 
+    if template_task.hide:
+        hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", None)
+        hide_label = getattr(settings, "TODOIST_HIDE_LABEL", None)
+        if hide_priority is not None:
+            task_params["priority"] = int(hide_priority)
+        if hide_label:
+            task_params.setdefault("labels", [])
+            if hide_label not in task_params["labels"]:
+                task_params["labels"].append(hide_label)
+
     if dry_run:
         import random
 
         logger.debug("Dry run: task: '%s'", title)
         if labels:
-            logger.debug("Dry run: labels: %s", ", ".join(labels))
+            logger.debug("Dry run: labels: %s", ", ".join(task_params.get("labels", labels)))
+        if template_task.hide:
+            logger.debug(
+                "Dry run: hide=True (priority=%s, label=%s)",
+                task_params.get("priority"),
+                getattr(settings, "TODOIST_HIDE_LABEL", None),
+            )
         created_todo_id = f"dry_run_{random.randint(1000, 9999)}"
     elif django_only:
         logger.info("django_only: skipping Todoist creation for task '%s'", title)
@@ -251,6 +267,7 @@ def _create_task_from_template_task(
         "title": title,
         "description": description,
         "depends_on": depends_on_task,
+        "hide": template_task.hide,
     }
     if due_date_str:
         task_kwargs["due_date"] = date.fromisoformat(due_date_str)
