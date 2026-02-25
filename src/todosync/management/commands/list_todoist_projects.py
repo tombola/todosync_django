@@ -71,8 +71,8 @@ def command():
         console.print(table)
         console.print()
         console.print(
-            "[green]To use a project for task creation, add its ID to the "
-            "default_project_id field in Django Admin → Task Sync Settings[/green]"
+            "[green]To use a project for task creation, set TODOIST_PROJECT_ID=<id> "
+            "in your .env file (or per-template via Django Admin → Task Group Templates)[/green]"
         )
 
     except Exception as e:

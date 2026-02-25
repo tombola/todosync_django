@@ -1,3 +1,4 @@
+from django.conf import settings as django_settings
 from django.db import models
 from polymorphic.models import PolymorphicModel
 from taggit.managers import TaggableManager
@@ -31,12 +32,6 @@ class LabelActionRule(models.Model):
 
 class TaskSyncSettings(models.Model):
     """Site-wide settings for task sync. Only one instance should exist."""
-
-    default_project_id = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Default project ID for task sync. Templates can override this per-template.",
-    )
 
     class Meta:
         verbose_name = "Task Sync Settings"
@@ -89,11 +84,10 @@ class BaseTaskGroupTemplate(PolymorphicModel):
         return self.title
 
     def get_effective_project_id(self):
-        """Return project_id, falling back to TaskSyncSettings default."""
+        """Return project_id, falling back to TODOIST_PROJECT_ID setting."""
         if self.project_id:
             return self.project_id
-        settings = TaskSyncSettings.load()
-        return settings.default_project_id
+        return getattr(django_settings, "TODOIST_PROJECT_ID", "")
 
     def get_parent_task_model(self):
         """Return the model class for creating parent tasks."""
