@@ -306,7 +306,7 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
         task_params["description"] = task.description
 
     resolved_project_id = project_id
-    if not resolved_project_id:
+    if not resolved_project_id and not parent_todo_id:
         try:
             resolved_project_id = task.parent_task.template.get_effective_project_id()
         except AttributeError:
@@ -315,6 +315,16 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
         task_params["project_id"] = resolved_project_id
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
+
+    if task.hide:
+        hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", None)
+        hide_label = getattr(settings, "TODOIST_HIDE_LABEL", None)
+        if hide_priority is not None:
+            task_params["priority"] = int(hide_priority)
+        if hide_label:
+            task_params.setdefault("labels", [])
+            if hide_label not in task_params["labels"]:
+                task_params["labels"].append(hide_label)
 
     todo_id = _add_todoist_task(api, task_params, task.title)
     task.todo_id = todo_id
