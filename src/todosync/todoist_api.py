@@ -42,17 +42,32 @@ def get_api_client():
     return TodoistAPI(api_token)
 
 
+def _add_todoist_task(api, task_params, label):
+    """Call api.add_task with retry/error handling. Returns the created task's id."""
+    try:
+        logger.info("Creating Todoist task: %s", label)
+        for attempt in stamina.retry_context(on=_is_retryable_request_error):
+            with attempt:
+                created = api.add_task(**task_params)
+        logger.info("Todoist task created: todo_id=%s (%s)", created.id, label)
+        return created.id
+    except Exception:
+        logger.exception("Failed to create Todoist task: %s", label)
+        raise
+
+
 def create_tasks_from_template(
-    api, template, token_values, form_description="", dry_run=False
+    api, template, token_values, form_description="", dry_run=False, django_only=False
 ):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
-        api: TodoistAPI instance (can be None if dry_run=True)
+        api: TodoistAPI instance (can be None if dry_run=True or django_only=True)
         template: BaseTaskGroupTemplate instance
         token_values: Dict of token replacements (field_name -> value)
         form_description: Optional description from the creation form
         dry_run: If True, skip API calls and DB writes; log planned actions at DEBUG level
+        django_only: If True, skip Todoist API calls but still persist Django records
 
     Returns:
         Dict with 'parent_task_instance' and 'task_count'.
@@ -119,17 +134,12 @@ def create_tasks_from_template(
             logger.debug("Dry run: project ID: %s", project_id)
         parent_todo_id = f"dry_run_{random.randint(1000, 9999)}"
         task_count += 1
+    elif django_only:
+        logger.info("django_only: skipping Todoist creation for parent task '%s'", parent_title)
+        parent_todo_id = ""
+        task_count += 1
     else:
-        try:
-            logger.info("Creating parent task: '%s'", parent_title)
-            for attempt in stamina.retry_context(on=_is_retryable_request_error):
-                with attempt:
-                    todoist_parent = api.add_task(**task_params)
-            parent_todo_id = todoist_parent.id
-            logger.info("Parent task created: todo_id=%s", parent_todo_id)
-        except Exception:
-            logger.exception("Failed to create parent task: '%s'", parent_title)
-            raise
+        parent_todo_id = _add_todoist_task(api, task_params, f"parent '{parent_title}'")
         task_count += 1
 
     # Save the parent task instance with external ID
@@ -149,6 +159,7 @@ def create_tasks_from_template(
             parent_task_instance=parent_task_instance if not dry_run else None,
             dry_run=dry_run,
             template_to_task_map=template_to_task_map,
+            django_only=django_only,
         )
 
     logger.info(
@@ -174,17 +185,19 @@ def _create_task_from_template_task(
     parent_task_instance=None,
     dry_run=False,
     template_to_task_map=None,
+    django_only=False,
 ):
     """Create a Todoist task from a TemplateTask instance.
 
     Args:
-        api: TodoistAPI instance (can be None if dry_run=True)
+        api: TodoistAPI instance (can be None if dry_run=True or django_only=True)
         template_task: TemplateTask model instance
         token_values: Dict of token replacements
         parent_todo_id: External parent task ID (for Todoist nesting)
         parent_task_instance: BaseParentTask instance that owns this task
         dry_run: If True, skip API calls and DB writes; log planned actions at DEBUG level
         template_to_task_map: Mutable dict {template_task.pk: Task} for resolving depends_on
+        django_only: If True, skip Todoist API call but still persist the Django Task record
 
     Returns:
         Count of tasks created (always 1).
@@ -218,17 +231,13 @@ def _create_task_from_template_task(
         if labels:
             logger.debug("Dry run: labels: %s", ", ".join(labels))
         created_todo_id = f"dry_run_{random.randint(1000, 9999)}"
+    elif django_only:
+        logger.info("django_only: skipping Todoist creation for task '%s'", title)
+        created_todo_id = ""
     else:
-        try:
-            logger.info("Creating child task: '%s' (parent=%s)", title, parent_todo_id)
-            for attempt in stamina.retry_context(on=_is_retryable_request_error):
-                with attempt:
-                    created_task = api.add_task(**task_params)
-            created_todo_id = created_task.id
-            logger.info("Child task created: '%s', todo_id=%s", title, created_todo_id)
-        except Exception:
-            logger.exception("Failed to create child task: '%s'", title)
-            raise
+        created_todo_id = _add_todoist_task(
+            api, task_params, f"child '{title}' (parent={parent_todo_id})"
+        )
 
     # Resolve depends_on: map the source TemplateTask dependency to the already-created Task.
     depends_on_task = None
@@ -254,6 +263,46 @@ def _create_task_from_template_task(
             template_to_task_map[template_task.pk] = task_record
 
     return 1
+
+
+def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_id=None):
+    """Create a Todoist task for a Django Task that has no todoist ID yet.
+
+    Args:
+        api: TodoistAPI instance
+        task: Task or BaseParentTask instance
+        project_id: Todoist project ID. If omitted, attempts to resolve via
+                    task.parent_task.template.get_effective_project_id().
+        parent_todo_id: Todoist parent task ID for nesting.
+
+    Returns:
+        The new todo_id string, or None if the task already had one.
+    """
+    if task.todo_id:
+        logger.info(
+            "Task '%s' already has todo_id=%s, skipping", task.title, task.todo_id
+        )
+        return None
+
+    task_params = {"content": task.title}
+    if task.description:
+        task_params["description"] = task.description
+
+    resolved_project_id = project_id
+    if not resolved_project_id:
+        try:
+            resolved_project_id = task.parent_task.template.get_effective_project_id()
+        except AttributeError:
+            pass
+    if resolved_project_id:
+        task_params["project_id"] = resolved_project_id
+    if parent_todo_id:
+        task_params["parent_id"] = parent_todo_id
+
+    todo_id = _add_todoist_task(api, task_params, task.title)
+    task.todo_id = todo_id
+    task.save()
+    return todo_id
 
 
 def _verify_webhook_signature(request):

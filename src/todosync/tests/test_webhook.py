@@ -234,6 +234,80 @@ def crop_task_with_child(db):
     return parent, child
 
 
+@pytest.fixture
+def template_with_tasks(db):
+    """A CropTaskGroupTemplate with two TemplateTask children."""
+    from tasks.models import CropTaskGroupTemplate
+    from todosync.models import TemplateTask
+
+    template = CropTaskGroupTemplate.objects.create(
+        title="Sow template", project_id="proj123"
+    )
+    TemplateTask.objects.create(template=template, title="Sow {SKU}", order=1)
+    TemplateTask.objects.create(template=template, title="Water {SKU}", order=2)
+    return template
+
+
+def test_django_only_then_push_to_todoist(db, template_with_tasks):
+    """django_only=True creates Django records without Todoist calls;
+    create_todoist_task_for_django_task then pushes each to Todoist."""
+    from todosync.models import Task
+    from todosync.todoist_api import (
+        create_tasks_from_template,
+        create_todoist_task_for_django_task,
+    )
+
+    mock_api = MagicMock()
+    token_values = {
+        "sku": "TOM-001",
+        "crop": "Tomato",
+        "variety_name": "Roma",
+        "bed": "B1",
+        "seed_source": "supplier",
+        "spacing": "30cm",
+    }
+
+    # Step 1: create django records only — no Todoist calls
+    result = create_tasks_from_template(
+        mock_api, template_with_tasks, token_values, django_only=True
+    )
+    mock_api.add_task.assert_not_called()
+
+    parent = result["parent_task_instance"]
+    assert parent.pk is not None
+    assert parent.todo_id == ""
+
+    child_tasks = list(Task.objects.filter(parent_task=parent))
+    assert len(child_tasks) == 2
+    assert all(t.todo_id == "" for t in child_tasks)
+
+    # Step 2: push each task to Todoist
+    mock_api.add_task.side_effect = [
+        MagicMock(id="todo_parent"),
+        MagicMock(id="todo_child1"),
+        MagicMock(id="todo_child2"),
+    ]
+
+    returned_id = create_todoist_task_for_django_task(mock_api, parent)
+    assert returned_id == "todo_parent"
+    parent.refresh_from_db()
+    assert parent.todo_id == "todo_parent"
+
+    for task in child_tasks:
+        create_todoist_task_for_django_task(mock_api, task)
+
+    assert mock_api.add_task.call_count == 3
+
+    for task in child_tasks:
+        task.refresh_from_db()
+        assert task.todo_id != ""
+
+    # Step 3: calling again on a task that already has a todo_id is a no-op
+    result2 = create_todoist_task_for_django_task(mock_api, parent)
+    assert result2 is None
+    assert mock_api.add_task.call_count == 3  # unchanged
+
+
 def test_completed_task_with_sow_label_moves_to_propagation(client, crop_task_with_child):
     """Completing a task with label 'sow' moves it to the propagation section."""
     from tasks.models import SECTIONS
