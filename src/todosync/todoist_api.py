@@ -29,7 +29,9 @@ logger = logging.getLogger(__name__)
 def _is_retryable_request_error(exc: Exception) -> bool:
     if isinstance(exc, requests.exceptions.HTTPError):
         return exc.response.status_code >= 500 or exc.response.status_code == 429
-    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+    return isinstance(
+        exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+    )
 
 
 def get_api_client():
@@ -40,7 +42,9 @@ def get_api_client():
     return TodoistAPI(api_token)
 
 
-def create_tasks_from_template(api, template, token_values, form_description="", dry_run=False):
+def create_tasks_from_template(
+    api, template, token_values, form_description="", dry_run=False
+):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
@@ -133,7 +137,9 @@ def create_tasks_from_template(api, template, token_values, form_description="",
     if not dry_run:
         parent_task_instance.save()
 
-    # Create child tasks from template (flat — no subtask nesting)
+    # Create child tasks from template (flat — no subtask nesting).
+    # The map accumulates template_task.pk → created Task so depends_on can be resolved.
+    template_to_task_map = {}  # {template_task.pk: created Task}
     for template_task in template.template_tasks.order_by("order", "pk"):
         task_count += _create_task_from_template_task(
             api,
@@ -142,6 +148,7 @@ def create_tasks_from_template(api, template, token_values, form_description="",
             parent_todo_id=parent_todo_id,
             parent_task_instance=parent_task_instance if not dry_run else None,
             dry_run=dry_run,
+            template_to_task_map=template_to_task_map,
         )
 
     logger.info(
@@ -166,6 +173,7 @@ def _create_task_from_template_task(
     parent_todo_id=None,
     parent_task_instance=None,
     dry_run=False,
+    template_to_task_map=None,
 ):
     """Create a Todoist task from a TemplateTask instance.
 
@@ -176,12 +184,17 @@ def _create_task_from_template_task(
         parent_todo_id: External parent task ID (for Todoist nesting)
         parent_task_instance: BaseParentTask instance that owns this task
         dry_run: If True, skip API calls and DB writes; log planned actions at DEBUG level
+        template_to_task_map: Mutable dict {template_task.pk: Task} for resolving depends_on
 
     Returns:
         Count of tasks created (always 1).
     """
     title = substitute_tokens(template_task.title, token_values)
-    description = substitute_tokens(template_task.description, token_values) if template_task.description else ""
+    description = (
+        substitute_tokens(template_task.description, token_values)
+        if template_task.description
+        else ""
+    )
 
     labels = list(template_task.tags.names())
 
@@ -217,12 +230,18 @@ def _create_task_from_template_task(
             logger.exception("Failed to create child task: '%s'", title)
             raise
 
+    # Resolve depends_on: map the source TemplateTask dependency to the already-created Task.
+    depends_on_task = None
+    if template_task.depends_on_id and template_to_task_map:
+        depends_on_task = template_to_task_map.get(template_task.depends_on_id)
+
     task_kwargs = {
         "parent_task": parent_task_instance,
         "template_task": template_task,
         "todo_id": created_todo_id,
         "title": title,
         "description": description,
+        "depends_on": depends_on_task,
     }
     if due_date_str:
         task_kwargs["due_date"] = date.fromisoformat(due_date_str)
@@ -230,6 +249,9 @@ def _create_task_from_template_task(
     if not dry_run:
         task_record = Task.objects.create(**task_kwargs)
         task_record.tags.set(template_task.tags.all())
+        if template_to_task_map is not None:
+            # Register so later tasks in this run can depend on this one.
+            template_to_task_map[template_task.pk] = task_record
 
     return 1
 
@@ -365,6 +387,8 @@ def todoist_webhook(request):
             update_fields,
         )
     else:
-        logger.debug("Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id)
+        logger.debug(
+            "Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id
+        )
 
     return HttpResponse(status=200)
