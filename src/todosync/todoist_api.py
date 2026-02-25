@@ -316,11 +316,10 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
 
+    hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", "2")
+    task_params["priority"] = int(hide_priority)
     if task.hide:
-        hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", None)
         hide_label = getattr(settings, "TODOIST_HIDE_LABEL", None)
-        if hide_priority is not None:
-            task_params["priority"] = int(hide_priority)
         if hide_label:
             task_params.setdefault("labels", [])
             if hide_label not in task_params["labels"]:
