@@ -18,7 +18,8 @@ def _is_retryable_request_error(exc: Exception) -> bool:
 @click.option("--dry-run", is_flag=True, help="Show what would be deleted without making changes.")
 @click.option("--task-id", type=int, multiple=True, help="Django Task pk(s) to target.")
 @click.option("--todo-id", type=str, multiple=True, help="Todoist task ID(s) to target.")
-def command(dry_run, task_id, todo_id):
+@click.option("--hidden", is_flag=True, help="Only target tasks where hide > 0.")
+def command(dry_run, task_id, todo_id, hidden):
     """Delete Todoist tasks referenced by Django Task records and clear their todo_id.
 
     With no filters, targets all tasks with a todo_id. Use --task-id or --todo-id
@@ -32,6 +33,8 @@ def command(dry_run, task_id, todo_id):
         raise click.Abort()
 
     tasks = Task.objects.exclude(todo_id="").exclude(templatetask__isnull=False)
+    if hidden:
+        tasks = tasks.filter(hide__gt=0)
     if task_id:
         tasks = tasks.filter(pk__in=task_id)
     if todo_id:
