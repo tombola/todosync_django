@@ -38,17 +38,23 @@ def create_task_group(request):
 
             try:
                 if dry_run:
-                    result = create_tasks_from_template(None, template, token_values, form_description, dry_run=True)
+                    result = create_tasks_from_template(
+                        None, template, token_values, form_description, dry_run=True
+                    )
                     logger.info(
                         "Task group created (dry run): template='%s', task_count=%d",
                         template.title,
                         result["task_count"],
                     )
-                    messages.success(request, f"DRY RUN: Would create {result['task_count']} tasks")
+                    messages.success(
+                        request, f"DRY RUN: Would create {result['task_count']} tasks"
+                    )
                 else:
                     api = get_api_client()
                     if not api:
-                        logger.warning("Task creation failed: Todoist API token not configured")
+                        logger.warning(
+                            "Task creation failed: Todoist API token not configured"
+                        )
                         messages.error(request, "Todoist API token not configured")
                         return redirect("todosync:create_task_group")
 
@@ -63,12 +69,16 @@ def create_task_group(request):
                         template.title,
                         result["task_count"],
                     )
-                    messages.success(request, f"Successfully created {result['task_count']} tasks")
+                    messages.success(
+                        request, f"Successfully created {result['task_count']} tasks"
+                    )
 
                 return redirect("todosync:create_task_group")
 
             except Exception as e:
-                logger.exception("Task group creation failed: template='%s'", template.title)
+                logger.exception(
+                    "Task group creation failed: template='%s'", template.title
+                )
                 error_message = str(e)
 
                 if "400 Client Error: Bad Request" in error_message:

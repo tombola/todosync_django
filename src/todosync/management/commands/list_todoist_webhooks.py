@@ -10,7 +10,9 @@ from rich.table import Table
 def _is_retryable_request_error(exc: Exception) -> bool:
     if isinstance(exc, requests.exceptions.HTTPError):
         return exc.response.status_code >= 500 or exc.response.status_code == 429
-    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+    return isinstance(
+        exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+    )
 
 
 TODOIST_WEBHOOKS_URL = "https://api.todoist.com/sync/v9/webhooks"
@@ -30,11 +32,19 @@ def command():
     client_secret = getattr(settings, "TODOIST_CLIENT_SECRET", None)
 
     if not api_token:
-        console.print("[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.", style="bold")
+        console.print(
+            "[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.",
+            style="bold",
+        )
         raise click.Abort()
     if not client_id or not client_secret:
-        console.print("[red]Error:[/red] TODOIST_CLIENT_ID and TODOIST_CLIENT_SECRET are required.", style="bold")
-        console.print("Create a Todoist app at https://developer.todoist.com/appconsole.html")
+        console.print(
+            "[red]Error:[/red] TODOIST_CLIENT_ID and TODOIST_CLIENT_SECRET are required.",
+            style="bold",
+        )
+        console.print(
+            "Create a Todoist app at https://developer.todoist.com/appconsole.html"
+        )
         raise click.Abort()
 
     headers = {"Authorization": f"Bearer {api_token}"}

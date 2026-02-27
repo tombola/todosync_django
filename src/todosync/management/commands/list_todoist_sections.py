@@ -10,7 +10,9 @@ from todoist_api_python.api import TodoistAPI
 def _is_retryable_request_error(exc: Exception) -> bool:
     if isinstance(exc, requests.exceptions.HTTPError):
         return exc.response.status_code >= 500 or exc.response.status_code == 429
-    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+    return isinstance(
+        exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+    )
 
 
 @click.command()
@@ -23,7 +25,10 @@ def command(project_id):
     api_token = getattr(settings, "TODOIST_API_TOKEN", None)
 
     if not api_token:
-        console.print("[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.", style="bold")
+        console.print(
+            "[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.",
+            style="bold",
+        )
         console.print("Please add your Todoist API token to the .env file.")
         raise click.Abort()
 
@@ -38,7 +43,11 @@ def command(project_id):
         # Get sections from paginator
         for attempt in stamina.retry_context(on=_is_retryable_request_error):
             with attempt:
-                sections_paginator = api.get_sections(project_id=project_id) if project_id else api.get_sections()
+                sections_paginator = (
+                    api.get_sections(project_id=project_id)
+                    if project_id
+                    else api.get_sections()
+                )
                 sections = []
                 for page in sections_paginator:
                     # Each page is a list of sections
@@ -49,7 +58,9 @@ def command(project_id):
 
         if not sections:
             if project_id:
-                console.print(f"[yellow]No sections found for project {project_id}.[/yellow]")
+                console.print(
+                    f"[yellow]No sections found for project {project_id}.[/yellow]"
+                )
             else:
                 console.print("[yellow]No sections found.[/yellow]")
             return
@@ -69,7 +80,9 @@ def command(project_id):
 
         # Add rows to table
         for section in sorted_sections:
-            table.add_row(section.id, section.name, section.project_id, str(section.order))
+            table.add_row(
+                section.id, section.name, section.project_id, str(section.order)
+            )
 
         console.print(table)
         console.print()
@@ -79,5 +92,7 @@ def command(project_id):
         )
 
     except Exception as e:
-        console.print(f"[red]Error fetching sections from Todoist:[/red] {str(e)}", style="bold")
+        console.print(
+            f"[red]Error fetching sections from Todoist:[/red] {str(e)}", style="bold"
+        )
         raise click.Abort()

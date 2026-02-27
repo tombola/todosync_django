@@ -10,7 +10,9 @@ from todoist_api_python.api import TodoistAPI
 def _is_retryable_request_error(exc: Exception) -> bool:
     if isinstance(exc, requests.exceptions.HTTPError):
         return exc.response.status_code >= 500 or exc.response.status_code == 429
-    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+    return isinstance(
+        exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+    )
 
 
 @click.command()
@@ -22,7 +24,10 @@ def command():
     api_token = getattr(settings, "TODOIST_API_TOKEN", None)
 
     if not api_token:
-        console.print("[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.", style="bold")
+        console.print(
+            "[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.",
+            style="bold",
+        )
         console.print("Please add your Todoist API token to the .env file.")
         raise click.Abort()
 
@@ -76,5 +81,7 @@ def command():
         )
 
     except Exception as e:
-        console.print(f"[red]Error fetching projects from Todoist:[/red] {str(e)}", style="bold")
+        console.print(
+            f"[red]Error fetching projects from Todoist:[/red] {str(e)}", style="bold"
+        )
         raise click.Abort()

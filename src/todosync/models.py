@@ -7,7 +7,9 @@ from taggit.managers import TaggableManager
 class LabelActionRule(models.Model):
     """Rule for moving completed tasks to different sections based on label"""
 
-    settings = models.ForeignKey("TaskSyncSettings", on_delete=models.CASCADE, related_name="label_action_rules")
+    settings = models.ForeignKey(
+        "TaskSyncSettings", on_delete=models.CASCADE, related_name="label_action_rules"
+    )
 
     source_section_id = models.CharField(
         max_length=100,
@@ -15,7 +17,9 @@ class LabelActionRule(models.Model):
         help_text="Todoist section ID to monitor for completed tasks with this label",
     )
 
-    label = models.CharField(max_length=100, help_text="Label to match (e.g., 'harvest', 'plant')")
+    label = models.CharField(
+        max_length=100, help_text="Label to match (e.g., 'harvest', 'plant')"
+    )
 
     destination_section_id = models.CharField(
         max_length=100,

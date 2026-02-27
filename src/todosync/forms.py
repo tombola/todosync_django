@@ -31,10 +31,14 @@ class BaseTaskGroupCreationForm(forms.Form):
                             model_field = parent_task_model._meta.get_field(field_name)
                             placeholder = model_field.help_text or ""
                             self.fields[f"token_{field_name}"] = forms.CharField(
-                                label=model_field.verbose_name.title() if model_field.verbose_name else field_name,
+                                label=model_field.verbose_name.title()
+                                if model_field.verbose_name
+                                else field_name,
                                 required=not model_field.blank,
                                 max_length=getattr(model_field, "max_length", None),
-                                widget=forms.TextInput(attrs={"placeholder": placeholder}),
+                                widget=forms.TextInput(
+                                    attrs={"placeholder": placeholder}
+                                ),
                             )
                         except Exception:
                             self.fields[f"token_{field_name}"] = forms.CharField(

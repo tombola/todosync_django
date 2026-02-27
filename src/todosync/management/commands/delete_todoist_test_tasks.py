@@ -11,11 +11,15 @@ TEST_TASK_PREFIX = "Test task"
 def _is_retryable_request_error(exc: Exception) -> bool:
     if isinstance(exc, requests.exceptions.HTTPError):
         return exc.response.status_code >= 500 or exc.response.status_code == 429
-    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+    return isinstance(
+        exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+    )
 
 
 @click.command()
-@click.option("--dry-run", is_flag=True, help="Show what would be deleted without making changes.")
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be deleted without making changes."
+)
 def command(dry_run):
     """Delete all Todoist tasks whose title starts with 'Test task'.
 
@@ -25,7 +29,10 @@ def command(dry_run):
 
     api_token = getattr(settings, "TODOIST_API_TOKEN", None)
     if not api_token:
-        console.print("[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.", style="bold")
+        console.print(
+            "[red]Error:[/red] TODOIST_API_TOKEN not configured in settings.",
+            style="bold",
+        )
         raise click.Abort()
 
     api = TodoistAPI(api_token)
@@ -40,10 +47,14 @@ def command(dry_run):
     matching = [t for t in tasks if t.content.startswith(TEST_TASK_PREFIX)]
 
     if not matching:
-        console.print(f"[yellow]No tasks found starting with '{TEST_TASK_PREFIX}'.[/yellow]")
+        console.print(
+            f"[yellow]No tasks found starting with '{TEST_TASK_PREFIX}'.[/yellow]"
+        )
         return
 
-    console.print(f"Found [bold]{len(matching)}[/bold] task(s) starting with '{TEST_TASK_PREFIX}'.")
+    console.print(
+        f"Found [bold]{len(matching)}[/bold] task(s) starting with '{TEST_TASK_PREFIX}'."
+    )
 
     if dry_run:
         for task in matching:

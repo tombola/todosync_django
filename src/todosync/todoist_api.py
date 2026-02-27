@@ -19,7 +19,7 @@ from django.views.decorators.http import require_POST
 from pydantic import ValidationError
 from todoist_api_python.api import TodoistAPI
 
-from .models import BaseParentTask, Task
+from .models import BaseParentTask, Task, TaskRule, TodoistSection
 from .schemas import TodoistWebhookPayload, WebhookEventType
 from .utils import substitute_tokens
 
@@ -36,7 +36,9 @@ _WEBHOOK_ACTION_NAMES = {
 def _is_retryable_request_error(exc: Exception) -> bool:
     if isinstance(exc, requests.exceptions.HTTPError):
         return exc.response.status_code >= 500 or exc.response.status_code == 429
-    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+    return isinstance(
+        exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+    )
 
 
 def get_api_client():
@@ -61,7 +63,9 @@ def _add_todoist_task(api, task_params, label):
         raise
 
 
-def create_tasks_from_template(api, template, token_values, form_description="", dry_run=False, django_only=False):
+def create_tasks_from_template(
+    api, template, token_values, form_description="", dry_run=False, django_only=False
+):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
@@ -138,7 +142,9 @@ def create_tasks_from_template(api, template, token_values, form_description="",
         parent_todo_id = f"dry_run_{random.randint(1000, 9999)}"
         task_count += 1
     elif django_only:
-        logger.info("django_only: skipping Todoist creation for parent task '%s'", parent_title)
+        logger.info(
+            "django_only: skipping Todoist creation for parent task '%s'", parent_title
+        )
         parent_todo_id = ""
         task_count += 1
     else:
@@ -207,7 +213,11 @@ def _create_task_from_template_task(
         Count of tasks created (always 1).
     """
     title = substitute_tokens(template_task.title, token_values)
-    description = substitute_tokens(template_task.description, token_values) if template_task.description else ""
+    description = (
+        substitute_tokens(template_task.description, token_values)
+        if template_task.description
+        else ""
+    )
 
     labels = list(template_task.tags.names())
 
@@ -239,7 +249,9 @@ def _create_task_from_template_task(
 
         logger.debug("Dry run: task: '%s'", title)
         if labels:
-            logger.debug("Dry run: labels: %s", ", ".join(task_params.get("labels", labels)))
+            logger.debug(
+                "Dry run: labels: %s", ", ".join(task_params.get("labels", labels))
+            )
         if template_task.hide:
             logger.debug(
                 "Dry run: hide=True (priority=%s, label=%s)",
@@ -251,7 +263,9 @@ def _create_task_from_template_task(
         logger.info("django_only: skipping Todoist creation for task '%s'", title)
         created_todo_id = ""
     else:
-        created_todo_id = _add_todoist_task(api, task_params, f"child '{title}' (parent={parent_todo_id})")
+        created_todo_id = _add_todoist_task(
+            api, task_params, f"child '{title}' (parent={parent_todo_id})"
+        )
 
     # Resolve depends_on: map the source TemplateTask dependency to the already-created Task.
     depends_on_task = None
@@ -303,7 +317,9 @@ def _get_task_type_label(task):
     return None
 
 
-def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_id=None):
+def create_todoist_task_for_django_task(
+    api, task, project_id=None, parent_todo_id=None
+):
     """Create a Todoist task for a Django Task that has no todoist ID yet.
 
     Args:
@@ -317,7 +333,9 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
         The new todo_id string, or None if the task already had one.
     """
     if task.todo_id:
-        logger.info("Task '%s' already has todo_id=%s, skipping", task.title, task.todo_id)
+        logger.info(
+            "Task '%s' already has todo_id=%s, skipping", task.title, task.todo_id
+        )
         return None
 
     task_params = {"content": task.title}
@@ -381,7 +399,11 @@ def update_todoist_task_hide(api, task):
         update_kwargs["labels"] = labels
 
     try:
-        logger.info("Updating Todoist task hide state: todo_id=%s, hide=%s", task.todo_id, task.hide)
+        logger.info(
+            "Updating Todoist task hide state: todo_id=%s, hide=%s",
+            task.todo_id,
+            task.hide,
+        )
         for attempt in stamina.retry_context(on=_is_retryable_request_error):
             with attempt:
                 api.update_task(task.todo_id, **update_kwargs)
@@ -408,7 +430,13 @@ def _verify_webhook_signature(request):
 
 
 def _move_task_by_label(task, item):
-    """Move the parent task to a section based on the child's label and the parent's label_section_map."""
+    """Move the parent task to a section based on TaskRule DB records.
+
+    Queries TaskRule for rule_key='crop_label_completion_section' and
+    trigger='completed_task', matching condition 'label:<name>' against the
+    completed item's labels, then resolves action 'section:<key>' via
+    TodoistSection to obtain the Todoist section ID.
+    """
     if not item.parent_id:
         return
 
@@ -418,38 +446,49 @@ def _move_task_by_label(task, item):
         return
 
     try:
-        base_parent = parent.baseparenttask
+        parent.baseparenttask
     except BaseParentTask.DoesNotExist:
         return
 
-    if not base_parent.template:
+    if not item.labels:
         return
 
-    model_class = base_parent.template.get_parent_task_model()
-    if not model_class:
+    label_conditions = [f"label:{label}" for label in item.labels]
+    rule = TaskRule.objects.filter(
+        rule_key="crop_label_completion_section",
+        trigger="completed_task",
+        condition__in=label_conditions,
+    ).first()
+
+    if not rule:
         return
 
-    label_section_map = getattr(model_class, "label_section_map", {})
-    if not label_section_map:
+    section_key = rule.action.removeprefix("section:")
+    try:
+        section = TodoistSection.objects.get(key=section_key)
+    except TodoistSection.DoesNotExist:
+        logger.warning(
+            "TaskRule action references unknown section key '%s' (rule pk=%s)",
+            section_key,
+            rule.pk,
+        )
         return
 
-    for label in item.labels:
-        section_id = label_section_map.get(label)
-        if section_id:
-            api = get_api_client()
-            if api:
-                for attempt in stamina.retry_context(on=_is_retryable_request_error):
-                    with attempt:
-                        api.move_task(task_id=item.parent_id, section_id=section_id)
-                logger.info(
-                    "Moved parent task '%s' (%s) to section %s (child label: %s)",
-                    parent.title,
-                    item.parent_id,
-                    section_id,
-                    label,
-                )
-                action_log.info("django: move_task %s", parent.pk)
-            return
+    matched_label = rule.condition.removeprefix("label:")
+    api = get_api_client()
+    if api:
+        for attempt in stamina.retry_context(on=_is_retryable_request_error):
+            with attempt:
+                api.move_task(task_id=item.parent_id, section_id=section.section_id)
+        logger.info(
+            "Moved parent task '%s' (%s) to section %s [key=%s] (child label: %s)",
+            parent.title,
+            item.parent_id,
+            section.section_id,
+            section_key,
+            matched_label,
+        )
+        action_log.info("django: move_task %s", parent.pk)
 
 
 @csrf_exempt
@@ -526,11 +565,16 @@ def todoist_webhook(request):
             update_fields,
         )
     else:
-        logger.debug("Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id)
+        logger.debug(
+            "Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id
+        )
 
     if event in _WEBHOOK_ACTION_NAMES:
         action_log.info("todoist: %s %s", _WEBHOOK_ACTION_NAMES[event], task.pk)
-    elif event in (WebhookEventType.ITEM_UPDATED, WebhookEventType.ITEM_ADDED) and update_fields:
+    elif (
+        event in (WebhookEventType.ITEM_UPDATED, WebhookEventType.ITEM_ADDED)
+        and update_fields
+    ):
         action_log.info("todoist: updated_task %s", task.pk)
 
     return HttpResponse(status=200)
