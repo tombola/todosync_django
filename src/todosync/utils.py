@@ -18,5 +18,5 @@ def substitute_tokens(text, token_values):
     """
     result = text
     for token, value in token_values.items():
-        result = result.replace(f"{{{token}}}", value)
+        result = result.replace(f"{{{token}}}", str(value))
     return result
