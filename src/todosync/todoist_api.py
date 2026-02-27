@@ -305,6 +305,10 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
     if task.description:
         task_params["description"] = task.description
 
+    labels = list(task.tags.names())
+    if labels:
+        task_params["labels"] = labels
+
     resolved_project_id = project_id
     if not resolved_project_id and not parent_todo_id:
         try:
