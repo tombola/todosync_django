@@ -29,9 +29,7 @@ logger = logging.getLogger(__name__)
 def _is_retryable_request_error(exc: Exception) -> bool:
     if isinstance(exc, requests.exceptions.HTTPError):
         return exc.response.status_code >= 500 or exc.response.status_code == 429
-    return isinstance(
-        exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
-    )
+    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
 
 
 def get_api_client():
@@ -56,9 +54,7 @@ def _add_todoist_task(api, task_params, label):
         raise
 
 
-def create_tasks_from_template(
-    api, template, token_values, form_description="", dry_run=False, django_only=False
-):
+def create_tasks_from_template(api, template, token_values, form_description="", dry_run=False, django_only=False):
     """Create Todoist tasks from template and persist tracking records.
 
     Args:
@@ -203,11 +199,7 @@ def _create_task_from_template_task(
         Count of tasks created (always 1).
     """
     title = substitute_tokens(template_task.title, token_values)
-    description = (
-        substitute_tokens(template_task.description, token_values)
-        if template_task.description
-        else ""
-    )
+    description = substitute_tokens(template_task.description, token_values) if template_task.description else ""
 
     labels = list(template_task.tags.names())
 
@@ -251,9 +243,7 @@ def _create_task_from_template_task(
         logger.info("django_only: skipping Todoist creation for task '%s'", title)
         created_todo_id = ""
     else:
-        created_todo_id = _add_todoist_task(
-            api, task_params, f"child '{title}' (parent={parent_todo_id})"
-        )
+        created_todo_id = _add_todoist_task(api, task_params, f"child '{title}' (parent={parent_todo_id})")
 
     # Resolve depends_on: map the source TemplateTask dependency to the already-created Task.
     depends_on_task = None
@@ -282,6 +272,28 @@ def _create_task_from_template_task(
     return 1
 
 
+def _get_task_type_label(task):
+    """Return the task_type_label for a task, if any.
+
+    Checks the task instance directly first, then falls back to the
+    parent task model class resolved via template. This handles both
+    parent tasks (BaseParentTask subclasses) and child tasks (Task instances).
+    """
+    label = getattr(task, "task_type_label", None)
+    if label:
+        return label
+    try:
+        template = getattr(task, "template", None)
+        if not template and task.parent_task:
+            template = task.parent_task.template
+        if template:
+            model_class = template.get_parent_task_model()
+            return getattr(model_class, "task_type_label", None)
+    except AttributeError:
+        pass
+    return None
+
+
 def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_id=None):
     """Create a Todoist task for a Django Task that has no todoist ID yet.
 
@@ -296,9 +308,7 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
         The new todo_id string, or None if the task already had one.
     """
     if task.todo_id:
-        logger.info(
-            "Task '%s' already has todo_id=%s, skipping", task.title, task.todo_id
-        )
+        logger.info("Task '%s' already has todo_id=%s, skipping", task.title, task.todo_id)
         return None
 
     task_params = {"content": task.title}
@@ -306,6 +316,9 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
         task_params["description"] = task.description
 
     labels = list(task.tags.names())
+    task_type_label = _get_task_type_label(task)
+    if task_type_label and task_type_label not in labels:
+        labels.append(task_type_label)
     if labels:
         task_params["labels"] = labels
 
@@ -358,9 +371,7 @@ def update_todoist_task_hide(api, task):
         update_kwargs["labels"] = labels
 
     try:
-        logger.info(
-            "Updating Todoist task hide state: todo_id=%s, hide=%s", task.todo_id, task.hide
-        )
+        logger.info("Updating Todoist task hide state: todo_id=%s, hide=%s", task.todo_id, task.hide)
         for attempt in stamina.retry_context(on=_is_retryable_request_error):
             with attempt:
                 api.update_task(task.todo_id, **update_kwargs)
@@ -501,8 +512,6 @@ def todoist_webhook(request):
             update_fields,
         )
     else:
-        logger.debug(
-            "Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id
-        )
+        logger.debug("Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id)
 
     return HttpResponse(status=200)
