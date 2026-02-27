@@ -24,6 +24,13 @@ from .schemas import TodoistWebhookPayload, WebhookEventType
 from .utils import substitute_tokens
 
 logger = logging.getLogger(__name__)
+action_log = logging.getLogger("actions")
+
+_WEBHOOK_ACTION_NAMES = {
+    WebhookEventType.ITEM_COMPLETED: "completed_task",
+    WebhookEventType.ITEM_DELETED: "deleted_task",
+    WebhookEventType.ITEM_UNCOMPLETED: "uncompleted_task",
+}
 
 
 def _is_retryable_request_error(exc: Exception) -> bool:
@@ -142,6 +149,7 @@ def create_tasks_from_template(api, template, token_values, form_description="",
     parent_task_instance.todo_id = parent_todo_id
     if not dry_run:
         parent_task_instance.save()
+        action_log.info("django: create_task_group %s", parent_task_instance.pk)
 
     # Create child tasks from template (flat — no subtask nesting).
     # The map accumulates template_task.pk → created Task so depends_on can be resolved.
@@ -265,6 +273,7 @@ def _create_task_from_template_task(
     if not dry_run:
         task_record = Task.objects.create(**task_kwargs)
         task_record.tags.set(template_task.tags.all())
+        action_log.info("django: create_task %s", task_record.pk)
         if template_to_task_map is not None:
             # Register so later tasks in this run can depend on this one.
             template_to_task_map[template_task.pk] = task_record
@@ -345,6 +354,7 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
     todo_id = _add_todoist_task(api, task_params, task.title)
     task.todo_id = todo_id
     task.save()
+    action_log.info("django: push_task %s", task.pk)
     return todo_id
 
 
@@ -376,6 +386,7 @@ def update_todoist_task_hide(api, task):
             with attempt:
                 api.update_task(task.todo_id, **update_kwargs)
         logger.info("Updated Todoist task hide state: todo_id=%s", task.todo_id)
+        action_log.info("django: sync_hide %s", task.pk)
     except Exception:
         logger.exception("Failed to update Todoist task hide state: %s", task.todo_id)
         raise
@@ -437,6 +448,7 @@ def _move_task_by_label(task, item):
                     section_id,
                     label,
                 )
+                action_log.info("django: move_task %s", parent.pk)
             return
 
 
@@ -472,6 +484,8 @@ def todoist_webhook(request):
             item.content,
             item.id,
         )
+        if event == WebhookEventType.ITEM_COMPLETED:
+            action_log.info("todoist: completed_task %s user_task", item.content)
         return HttpResponse(status=200)
 
     update_fields = []
@@ -513,5 +527,10 @@ def todoist_webhook(request):
         )
     else:
         logger.debug("Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id)
+
+    if event in _WEBHOOK_ACTION_NAMES:
+        action_log.info("todoist: %s %s", _WEBHOOK_ACTION_NAMES[event], task.pk)
+    elif event in (WebhookEventType.ITEM_UPDATED, WebhookEventType.ITEM_ADDED) and update_fields:
+        action_log.info("todoist: updated_task %s", task.pk)
 
     return HttpResponse(status=200)
