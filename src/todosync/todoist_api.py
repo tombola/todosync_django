@@ -316,9 +316,9 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
 
-    hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", "2")
-    task_params["priority"] = int(hide_priority)
     if task.hide:
+        hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", "2")
+        task_params["priority"] = int(hide_priority)
         hide_label = getattr(settings, "TODOIST_HIDE_LABEL", None)
         if hide_label:
             task_params.setdefault("labels", [])
@@ -329,6 +329,41 @@ def create_todoist_task_for_django_task(api, task, project_id=None, parent_todo_
     task.todo_id = todo_id
     task.save()
     return todo_id
+
+
+def update_todoist_task_hide(api, task):
+    """Update a Todoist task's priority and labels to reflect the current hide state.
+
+    hide=True  → TODOIST_HIDE_PRIORITY + TODOIST_HIDE_LABEL added to labels.
+    hide=False → priority 1 (normal) + TODOIST_HIDE_LABEL removed from labels.
+    """
+    if not task.todo_id:
+        return
+
+    hide_priority = int(getattr(settings, "TODOIST_HIDE_PRIORITY", 2))
+    hide_label = getattr(settings, "TODOIST_HIDE_LABEL", None)
+
+    update_kwargs = {"priority": hide_priority if task.hide else 1}
+
+    if hide_label is not None:
+        labels = list(task.tags.names())
+        if task.hide and hide_label not in labels:
+            labels.append(hide_label)
+        elif not task.hide and hide_label in labels:
+            labels.remove(hide_label)
+        update_kwargs["labels"] = labels
+
+    try:
+        logger.info(
+            "Updating Todoist task hide state: todo_id=%s, hide=%s", task.todo_id, task.hide
+        )
+        for attempt in stamina.retry_context(on=_is_retryable_request_error):
+            with attempt:
+                api.update_task(task.todo_id, **update_kwargs)
+        logger.info("Updated Todoist task hide state: todo_id=%s", task.todo_id)
+    except Exception:
+        logger.exception("Failed to update Todoist task hide state: %s", task.todo_id)
+        raise
 
 
 def _verify_webhook_signature(request):
