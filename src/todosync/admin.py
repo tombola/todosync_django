@@ -7,8 +7,10 @@ from .models import (
     BaseTaskGroupTemplate,
     LabelActionRule,
     Task,
+    TaskRule,
     TaskSyncSettings,
     TemplateTask,
+    TodoistSection,
 )
 
 
@@ -66,6 +68,20 @@ class BaseParentTaskAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(TodoistSection)
+class TodoistSectionAdmin(admin.ModelAdmin):
+    list_display = ["key", "name", "section_id", "project_id"]
+    search_fields = ["key", "name", "section_id"]
+    readonly_fields = ["section_id", "name", "project_id"]
+
+
+@admin.register(TaskRule)
+class TaskRuleAdmin(admin.ModelAdmin):
+    list_display = ["rule_key", "trigger", "task_type", "condition", "action"]
+    list_filter = ["rule_key", "trigger"]
+    search_fields = ["condition", "action"]
 
 
 @admin.register(Task)

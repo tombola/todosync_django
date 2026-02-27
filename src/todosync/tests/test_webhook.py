@@ -308,10 +308,36 @@ def test_django_only_then_push_to_todoist(db, template_with_tasks):
     assert mock_api.add_task.call_count == 3  # unchanged
 
 
-def test_completed_task_with_sow_label_moves_to_propagation(client, crop_task_with_child):
-    """Completing a task with label 'sow' moves it to the propagation section."""
-    from tasks.models import SECTIONS
+@pytest.fixture
+def propagation_section(db):
+    """TodoistSection record for the propagation section."""
+    from todosync.models import TodoistSection
 
+    return TodoistSection.objects.create(
+        key="propagation",
+        section_id="6f5xwW4prvPPrcR5",
+        name="Propagation",
+        project_id="6Jf8VQXxpwv56VQ7",
+    )
+
+
+@pytest.fixture
+def sow_label_rule(db, propagation_section):
+    """TaskRule: completing a task labelled 'sow' moves parent to 'propagation'."""
+    from todosync.models import TaskRule
+
+    return TaskRule.objects.create(
+        rule_key="crop_label_completion_section",
+        trigger="completed_task",
+        condition="label:sow",
+        action="section:propagation",
+    )
+
+
+def test_completed_task_with_sow_label_moves_to_propagation(
+    client, crop_task_with_child, sow_label_rule, propagation_section
+):
+    """Completing a task with label 'sow' moves the parent to the propagation section."""
     body = _load_fixture("item_completed.json")
     mock_api = MagicMock()
 
@@ -321,5 +347,17 @@ def test_completed_task_with_sow_label_moves_to_propagation(client, crop_task_wi
     assert response.status_code == 200
     mock_api.move_task.assert_called_once_with(
         task_id="PARENT123",
-        section_id=SECTIONS["propagation"],
+        section_id=propagation_section.section_id,
     )
+
+
+def test_completed_task_with_label_no_rules_no_move(client, crop_task_with_child):
+    """No TaskRule records → no move attempted."""
+    body = _load_fixture("item_completed.json")
+    mock_api = MagicMock()
+
+    with patch("todosync.todoist_api.get_api_client", return_value=mock_api):
+        response = client.post(WEBHOOK_URL, data=body, content_type="application/json")
+
+    assert response.status_code == 200
+    mock_api.move_task.assert_not_called()

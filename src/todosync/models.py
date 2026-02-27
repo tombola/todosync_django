@@ -34,6 +34,88 @@ class LabelActionRule(models.Model):
         return f"Section {self.source_section_id}: {self.label} → Section {self.destination_section_id}"
 
 
+class TodoistSection(models.Model):
+    """A Todoist section, synced from the Todoist API.
+
+    The key slug is used in TaskRule actions to reference a section by
+    human-readable name rather than raw section_id. The key is preserved
+    across syncs so rules remain valid after a Todoist rename.
+    """
+
+    key = models.SlugField(
+        max_length=100,
+        unique=True,
+        help_text="Human-readable slug (e.g. 'propagation'). Set by admin; preserved on sync.",
+    )
+    section_id = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Todoist section ID",
+    )
+    name = models.CharField(
+        max_length=255,
+        help_text="Section name synced from Todoist API",
+    )
+    project_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Todoist project ID this section belongs to",
+    )
+
+    class Meta:
+        verbose_name = "Todoist Section"
+        verbose_name_plural = "Todoist Sections"
+        ordering = ["project_id", "name"]
+
+    def __str__(self):
+        return f"{self.key} ({self.section_id})"
+
+
+class TaskRule(models.Model):
+    """A rule that triggers an action on a task event.
+
+    Condition format: 'label:<label_name>'  (e.g. 'label:sow')
+    Action format:    'section:<key>'       (e.g. 'section:propagation')
+
+    The section key is resolved via TodoistSection.key at rule evaluation time.
+    """
+
+    task_type = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Task type label to scope rule to (e.g. 'crop'). Null matches all types.",
+    )
+    rule_key = models.CharField(
+        max_length=100,
+        help_text="Namespaced key grouping related rules (e.g. 'crop_label_completion_section')",
+    )
+    trigger = models.CharField(
+        max_length=100,
+        help_text="Event that activates this rule (e.g. 'completed_task')",
+    )
+    condition = models.CharField(
+        max_length=255,
+        help_text="Match condition in 'type:value' format (e.g. 'label:sow')",
+    )
+    action = models.CharField(
+        max_length=255,
+        help_text="Action to perform in 'type:value' format (e.g. 'section:propagation')",
+    )
+
+    class Meta:
+        verbose_name = "Task Rule"
+        verbose_name_plural = "Task Rules"
+        ordering = ["rule_key", "trigger"]
+        indexes = [
+            models.Index(fields=["rule_key", "trigger"]),
+        ]
+
+    def __str__(self):
+        prefix = f"[{self.task_type}] " if self.task_type else ""
+        return f"{prefix}{self.rule_key}: {self.condition} → {self.action}"
+
+
 class TaskSyncSettings(models.Model):
     """Site-wide settings for task sync. Only one instance should exist."""
 
@@ -117,7 +199,9 @@ class Task(models.Model):
         blank=True,
         help_text="Task ID from external task management service",
     )
-    title = models.CharField(max_length=500, help_text="Task title as sent to external service")
+    title = models.CharField(
+        max_length=500, help_text="Task title as sent to external service"
+    )
     todo_section_id = models.CharField(
         max_length=50,
         blank=True,
@@ -125,7 +209,9 @@ class Task(models.Model):
         help_text="Section ID from external service — used as column in kanban board",
     )
     completed = models.BooleanField(default=False)
-    due_date = models.DateField(null=True, blank=True, help_text="Due date for this task")
+    due_date = models.DateField(
+        null=True, blank=True, help_text="Due date for this task"
+    )
     parent_task = models.ForeignKey(
         "BaseParentTask",
         on_delete=models.CASCADE,
@@ -207,8 +293,6 @@ class BaseParentTask(Task):
     field values serve as token values for substitution in task titles.
     """
 
-    label_section_map = {}
-
     template = models.ForeignKey(
         BaseTaskGroupTemplate,
         on_delete=models.SET_NULL,
@@ -233,7 +317,10 @@ class BaseParentTask(Task):
 
     def get_token_values(self):
         """Return dict mapping token field names to their values."""
-        return {field_name: getattr(self, field_name, "") for field_name in self.get_token_field_names()}
+        return {
+            field_name: getattr(self, field_name, "")
+            for field_name in self.get_token_field_names()
+        }
 
     def get_parent_task_title(self):
         """Return the title for the Todoist parent task. Override in subclasses."""
