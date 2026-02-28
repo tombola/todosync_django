@@ -1,4 +1,5 @@
 from django.conf import settings as django_settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from polymorphic.models import PolymorphicModel
 from taggit.managers import TaggableManager
@@ -102,6 +103,21 @@ class TaskRule(models.Model):
         max_length=255,
         help_text="Action to perform in 'type:value' format (e.g. 'section:propagation')",
     )
+
+    def clean(self):
+        errors = {}
+        if self.condition and self.condition.startswith("label:"):
+            from taggit.models import Tag
+
+            slug = self.condition.split(":", 1)[1]
+            if not Tag.objects.filter(slug=slug).exists():
+                errors["condition"] = f"Label slug '{slug}' does not match any tag."
+        if self.action and self.action.startswith("section:"):
+            key = self.action.split(":", 1)[1]
+            if not TodoistSection.objects.filter(key=key).exists():
+                errors["action"] = f"Section key '{key}' does not match any TodoistSection."
+        if errors:
+            raise ValidationError(errors)
 
     class Meta:
         verbose_name = "Task Rule"
