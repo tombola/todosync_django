@@ -5,9 +5,7 @@ from django.forms import TextInput
 from .models import (
     BaseParentTask,
     BaseTaskGroupTemplate,
-    LabelActionRule,
     Task,
-    TaskRule,
     TaskSyncSettings,
     TemplateTask,
     TodoistSection,
@@ -33,15 +31,8 @@ class BaseTaskGroupTemplateAdmin(admin.ModelAdmin):
     inlines = [TemplateTaskInline]
 
 
-class LabelActionRuleInline(admin.TabularInline):
-    model = LabelActionRule
-    extra = 1
-
-
 @admin.register(TaskSyncSettings)
 class TaskSyncSettingsAdmin(admin.ModelAdmin):
-    inlines = [LabelActionRuleInline]
-
     def has_add_permission(self, request):
         return not TaskSyncSettings.objects.exists()
 
@@ -75,13 +66,6 @@ class TodoistSectionAdmin(admin.ModelAdmin):
     list_display = ["key", "name", "section_id", "project_id"]
     search_fields = ["key", "name", "section_id"]
     readonly_fields = ["section_id", "name", "project_id"]
-
-
-@admin.register(TaskRule)
-class TaskRuleAdmin(admin.ModelAdmin):
-    list_display = ["rule_key", "trigger", "task_type", "condition", "action"]
-    list_filter = ["rule_key", "trigger"]
-    search_fields = ["condition", "action"]
 
 
 @admin.register(Task)

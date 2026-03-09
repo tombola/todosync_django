@@ -19,7 +19,8 @@ from django.views.decorators.http import require_POST
 from pydantic import ValidationError
 from todoist_api_python.api import TodoistAPI
 
-from .models import BaseParentTask, Task, TaskRule, TodoistSection
+from .models import Task, TodoistSection
+from .registry import fire_rule_callbacks
 from .schemas import TodoistWebhookPayload, WebhookEventType
 from .utils import substitute_tokens
 
@@ -429,66 +430,47 @@ def _verify_webhook_signature(request):
     return hmac.compare_digest(signature, expected)
 
 
-def _move_task_by_label(task, item):
-    """Move the parent task to a section based on TaskRule DB records.
+def _apply_settings_label_rules(task, item):
+    """Move parent task based on TODOIST_LABEL_SECTION_RULES setting dict.
 
-    Queries TaskRule for rule_key='crop_label_completion_section' and
-    trigger='completed_task', matching condition 'label:<name>' against the
-    completed item's labels, then resolves action 'section:<key>' via
-    TodoistSection to obtain the Todoist section ID.
+    Reads a dict mapping label names to TodoistSection keys from settings:
+        TODOIST_LABEL_SECTION_RULES = {"sow": "propagation", "plant": "beds"}
+
+    Only fires if item has a parent_id and labels. Resolves the section key
+    via TodoistSection and calls api.move_task on the parent Todoist task ID.
     """
-    if not item.parent_id:
+    rules = getattr(settings, "TODOIST_LABEL_SECTION_RULES", {})
+    if not rules:
         return
 
-    try:
-        parent = Task.objects.get(todo_id=item.parent_id)
-    except Task.DoesNotExist:
+    matched_label = next((lbl for lbl in item.labels if lbl in rules), None)
+    if not matched_label:
         return
 
-    try:
-        parent.baseparenttask
-    except BaseParentTask.DoesNotExist:
-        return
-
-    if not item.labels:
-        return
-
-    label_conditions = [f"label:{label}" for label in item.labels]
-    rule = TaskRule.objects.filter(
-        rule_key="crop_label_completion_section",
-        trigger="completed_task",
-        condition__in=label_conditions,
-    ).first()
-
-    if not rule:
-        return
-
-    section_key = rule.action.removeprefix("section:")
+    section_key = rules[matched_label]
     try:
         section = TodoistSection.objects.get(key=section_key)
     except TodoistSection.DoesNotExist:
         logger.warning(
-            "TaskRule action references unknown section key '%s' (rule pk=%s)",
+            "TODOIST_LABEL_SECTION_RULES references unknown section key '%s' (label: %s)",
             section_key,
-            rule.pk,
+            matched_label,
         )
         return
 
-    matched_label = rule.condition.removeprefix("label:")
     api = get_api_client()
     if api:
         for attempt in stamina.retry_context(on=_is_retryable_request_error):
             with attempt:
                 api.move_task(task_id=item.parent_id, section_id=section.section_id)
         logger.info(
-            "Moved parent task '%s' (%s) to section %s [key=%s] (child label: %s)",
-            parent.title,
+            "Settings rule: moved parent (%s) to section %s [key=%s] (label: %s)",
             item.parent_id,
             section.section_id,
             section_key,
             matched_label,
         )
-        action_log.info("django: move_task %s", parent.pk)
+        action_log.info("django: move_task %s", task.pk)
 
 
 @csrf_exempt
@@ -533,8 +515,10 @@ def todoist_webhook(request):
         task.completed = True
         update_fields.append("completed")
 
-        if event == WebhookEventType.ITEM_COMPLETED and item.labels:
-            _move_task_by_label(task, item)
+        if event == WebhookEventType.ITEM_COMPLETED:
+            if item.labels:
+                _apply_settings_label_rules(task, item)
+            fire_rule_callbacks("completed_task", task, item)
 
     elif event == WebhookEventType.ITEM_UNCOMPLETED:
         task.completed = False

@@ -321,23 +321,11 @@ def propagation_section(db):
     )
 
 
-@pytest.fixture
-def sow_label_rule(db, propagation_section):
-    """TaskRule: completing a task labelled 'sow' moves parent to 'propagation'."""
-    from todosync.models import TaskRule
-
-    return TaskRule.objects.create(
-        rule_key="crop_label_completion_section",
-        trigger="completed_task",
-        condition="label:sow",
-        action="section:propagation",
-    )
-
-
-def test_completed_task_with_sow_label_moves_to_propagation(
-    client, crop_task_with_child, sow_label_rule, propagation_section
+def test_settings_label_rule_moves_parent(
+    client, crop_task_with_child, propagation_section, settings
 ):
-    """Completing a task with label 'sow' moves the parent to the propagation section."""
+    """TODOIST_LABEL_SECTION_RULES in settings moves parent to correct section."""
+    settings.TODOIST_LABEL_SECTION_RULES = {"sow": "propagation"}
     body = _load_fixture("item_completed.json")
     mock_api = MagicMock()
 
@@ -351,8 +339,9 @@ def test_completed_task_with_sow_label_moves_to_propagation(
     )
 
 
-def test_completed_task_with_label_no_rules_no_move(client, crop_task_with_child):
-    """No TaskRule records → no move attempted."""
+def test_no_settings_label_rule_no_move(client, crop_task_with_child, settings):
+    """Empty TODOIST_LABEL_SECTION_RULES means no move."""
+    settings.TODOIST_LABEL_SECTION_RULES = {}
     body = _load_fixture("item_completed.json")
     mock_api = MagicMock()
 
@@ -361,3 +350,17 @@ def test_completed_task_with_label_no_rules_no_move(client, crop_task_with_child
 
     assert response.status_code == 200
     mock_api.move_task.assert_not_called()
+
+
+def test_fire_rule_callbacks_called_on_completion(client, tracked_task, monkeypatch):
+    """fire_rule_callbacks is called when item:completed fires."""
+    import todosync.registry as reg
+
+    calls = []
+    monkeypatch.setattr(
+        reg, "_rule_callbacks", [lambda trigger, task, item: calls.append(trigger)]
+    )
+    body = _load_fixture("item_completed.json")
+    client.post(WEBHOOK_URL, data=body, content_type="application/json")
+
+    assert calls == ["completed_task"]

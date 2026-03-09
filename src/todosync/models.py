@@ -1,38 +1,7 @@
 from django.conf import settings as django_settings
-from django.core.exceptions import ValidationError
 from django.db import models
 from polymorphic.models import PolymorphicModel
 from taggit.managers import TaggableManager
-
-
-class LabelActionRule(models.Model):
-    """Rule for moving completed tasks to different sections based on label"""
-
-    settings = models.ForeignKey(
-        "TaskSyncSettings", on_delete=models.CASCADE, related_name="label_action_rules"
-    )
-
-    source_section_id = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Todoist section ID to monitor for completed tasks with this label",
-    )
-
-    label = models.CharField(
-        max_length=100, help_text="Label to match (e.g., 'harvest', 'plant')"
-    )
-
-    destination_section_id = models.CharField(
-        max_length=100,
-        help_text="Todoist section ID where completed tasks with this label should be moved",
-    )
-
-    class Meta:
-        verbose_name = "Label Action Rule"
-        verbose_name_plural = "Label Action Rules"
-
-    def __str__(self):
-        return f"Section {self.source_section_id}: {self.label} → Section {self.destination_section_id}"
 
 
 class TodoistSection(models.Model):
@@ -70,66 +39,6 @@ class TodoistSection(models.Model):
 
     def __str__(self):
         return f"{self.key} ({self.section_id})"
-
-
-class TaskRule(models.Model):
-    """A rule that triggers an action on a task event.
-
-    Condition format: 'label:<label_name>'  (e.g. 'label:sow')
-    Action format:    'section:<key>'       (e.g. 'section:propagation')
-
-    The section key is resolved via TodoistSection.key at rule evaluation time.
-    """
-
-    task_type = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Task type label to scope rule to (e.g. 'crop'). Null matches all types.",
-    )
-    rule_key = models.CharField(
-        max_length=100,
-        help_text="Namespaced key grouping related rules (e.g. 'crop_label_completion_section')",
-    )
-    trigger = models.CharField(
-        max_length=100,
-        help_text="Event that activates this rule (e.g. 'completed_task')",
-    )
-    condition = models.CharField(
-        max_length=255,
-        help_text="Match condition in 'type:value' format (e.g. 'label:sow')",
-    )
-    action = models.CharField(
-        max_length=255,
-        help_text="Action to perform in 'type:value' format (e.g. 'section:propagation')",
-    )
-
-    def clean(self):
-        errors = {}
-        if self.condition and self.condition.startswith("label:"):
-            from taggit.models import Tag
-
-            slug = self.condition.split(":", 1)[1]
-            if not Tag.objects.filter(slug=slug).exists():
-                errors["condition"] = f"Label slug '{slug}' does not match any tag."
-        if self.action and self.action.startswith("section:"):
-            key = self.action.split(":", 1)[1]
-            if not TodoistSection.objects.filter(key=key).exists():
-                errors["action"] = f"Section key '{key}' does not match any TodoistSection."
-        if errors:
-            raise ValidationError(errors)
-
-    class Meta:
-        verbose_name = "Task Rule"
-        verbose_name_plural = "Task Rules"
-        ordering = ["rule_key", "trigger"]
-        indexes = [
-            models.Index(fields=["rule_key", "trigger"]),
-        ]
-
-    def __str__(self):
-        prefix = f"[{self.task_type}] " if self.task_type else ""
-        return f"{prefix}{self.rule_key}: {self.condition} → {self.action}"
 
 
 class TaskSyncSettings(models.Model):
