@@ -181,6 +181,26 @@ class Task(models.Model):
         verbose_name_plural = "Tasks"
         ordering = ["created_at"]
 
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None:
+            self._maybe_unhide_for_due_date()
+        elif "due_date" in update_fields:
+            if self._maybe_unhide_for_due_date():
+                kwargs["update_fields"] = list(update_fields) + ["hide"]
+        super().save(*args, **kwargs)
+
+    def _maybe_unhide_for_due_date(self):
+        from datetime import date, timedelta
+
+        from django.conf import settings
+
+        window = getattr(settings, "TASK_UNHIDE_WINDOW", timedelta(weeks=4))
+        if self.hide and self.due_date is not None and self.due_date <= date.today() + window:
+            self.hide = False
+            return True
+        return False
+
     def __str__(self):
         return self.title
 
