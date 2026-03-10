@@ -548,6 +548,8 @@ def todoist_webhook(request):
             item.id,
             update_fields,
         )
+        if "due_date" in update_fields:
+            fire_rule_callbacks("due_date_changed", task, item)
     else:
         logger.debug(
             "Webhook %s: no changes for task '%s' (%s)", event, item.content, item.id
