@@ -28,6 +28,7 @@ class TemplateTaskInline(admin.TabularInline):
 @admin.register(BaseTaskGroupTemplate)
 class BaseTaskGroupTemplateAdmin(admin.ModelAdmin):
     list_display = ["title", "project_id", "created_at"]
+    search_fields = ["title"]
     inlines = [TemplateTaskInline]
 
 
