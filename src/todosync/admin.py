@@ -78,6 +78,7 @@ class TaskAdmin(admin.ModelAdmin):
         "depends_on",
         "todo_id",
         "created_at",
+        "completed_at",
     ]
     readonly_fields = [
         "parent_task",
@@ -86,6 +87,7 @@ class TaskAdmin(admin.ModelAdmin):
         "todo_id",
         "title",
         "created_at",
+        "completed_at",
     ]
 
     def has_add_permission(self, request):
