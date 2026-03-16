@@ -352,6 +352,61 @@ def test_no_settings_label_rule_no_move(client, crop_task_with_child, settings):
     mock_api.move_task.assert_not_called()
 
 
+# -- completed_at / completed_by --
+
+
+def test_item_completed_sets_completed_at(client, tracked_task):
+    body = _load_fixture("item_completed.json")
+    response = client.post(WEBHOOK_URL, data=body, content_type="application/json")
+
+    assert response.status_code == 200
+    tracked_task.refresh_from_db()
+    assert tracked_task.completed_at is not None
+    assert tracked_task.completed_at.isoformat().startswith("2025-01-21")
+
+
+def test_item_completed_creates_todoist_user(client, tracked_task):
+    from todosync.models import TodoistUser
+
+    body = _load_fixture("item_completed.json")
+    response = client.post(WEBHOOK_URL, data=body, content_type="application/json")
+
+    assert response.status_code == 200
+    tracked_task.refresh_from_db()
+    assert tracked_task.completed_by is not None
+    assert tracked_task.completed_by.email == "alice@example.com"
+    assert tracked_task.completed_by.full_name == "Alice"
+    assert TodoistUser.objects.filter(todoist_id="2671355").exists()
+
+
+def test_item_completed_updates_existing_todoist_user(client, tracked_task):
+    from todosync.models import TodoistUser
+
+    TodoistUser.objects.create(
+        todoist_id="2671355", email="old@example.com", full_name="Old Name"
+    )
+    body = _load_fixture("item_completed.json")
+    client.post(WEBHOOK_URL, data=body, content_type="application/json")
+
+    user = TodoistUser.objects.get(todoist_id="2671355")
+    assert user.email == "alice@example.com"
+    assert user.full_name == "Alice"
+    assert TodoistUser.objects.filter(todoist_id="2671355").count() == 1
+
+
+def test_item_completed_no_initiator(client, tracked_task):
+    fixture = json.loads(_load_fixture("item_completed.json"))
+    del fixture["initiator"]
+    body = json.dumps(fixture).encode()
+
+    response = client.post(WEBHOOK_URL, data=body, content_type="application/json")
+
+    assert response.status_code == 200
+    tracked_task.refresh_from_db()
+    assert tracked_task.completed is True
+    assert tracked_task.completed_by is None
+
+
 def test_fire_rule_callbacks_called_on_completion(client, tracked_task, monkeypatch):
     """fire_rule_callbacks is called when item:completed fires."""
     import todosync.registry as reg

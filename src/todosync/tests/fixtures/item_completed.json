@@ -1,5 +1,12 @@
 {
     "event_name": "item:completed",
+    "initiator": {
+        "id": "2671355",
+        "email": "alice@example.com",
+        "full_name": "Alice",
+        "image_id": "ad38375bdb094286af59f1eab36d8f20",
+        "is_premium": true
+    },
     "event_data": {
         "id": "ABC123",
         "user_id": "2671355",

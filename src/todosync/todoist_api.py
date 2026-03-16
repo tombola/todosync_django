@@ -19,7 +19,7 @@ from django.views.decorators.http import require_POST
 from pydantic import ValidationError
 from todoist_api_python.api import TodoistAPI
 
-from .models import Task, TodoistSection
+from .models import Task, TodoistSection, TodoistUser
 from .registry import fire_rule_callbacks
 from .schemas import TodoistWebhookPayload, WebhookEventType
 from .utils import substitute_tokens
@@ -516,6 +516,21 @@ def todoist_webhook(request):
         update_fields.append("completed")
 
         if event == WebhookEventType.ITEM_COMPLETED:
+            if item.completed_at is not None:
+                task.completed_at = item.completed_at
+                update_fields.append("completed_at")
+
+            if payload.initiator is not None:
+                user, _ = TodoistUser.objects.update_or_create(
+                    todoist_id=payload.initiator.id,
+                    defaults={
+                        "email": payload.initiator.email,
+                        "full_name": payload.initiator.full_name,
+                    },
+                )
+                task.completed_by = user
+                update_fields.append("completed_by")
+
             if item.labels:
                 _apply_settings_label_rules(task, item)
             fire_rule_callbacks("completed_task", task, item)

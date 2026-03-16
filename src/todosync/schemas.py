@@ -59,8 +59,19 @@ class TodoistItem(BaseModel):
     due: Due | None = None
 
 
+class TodoistInitiator(BaseModel):
+    """Todoist user who triggered the webhook event."""
+
+    id: str
+    email: str
+    full_name: str = ""
+    image_id: str | None = None
+    is_premium: bool = False
+
+
 class TodoistWebhookPayload(BaseModel):
     """Top-level webhook request body from Todoist."""
 
     event_name: WebhookEventType
     event_data: TodoistItem
+    initiator: TodoistInitiator | None = None

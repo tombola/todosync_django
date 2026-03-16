@@ -112,6 +112,25 @@ class BaseTaskGroupTemplate(PolymorphicModel):
         return []
 
 
+class TodoistUser(models.Model):
+    """Stores identity of a Todoist user, populated from webhook initiator data."""
+
+    todoist_id = models.CharField(
+        max_length=100, unique=True, help_text="Todoist user ID"
+    )
+    email = models.CharField(max_length=255, help_text="User email address")
+    full_name = models.CharField(
+        max_length=255, blank=True, help_text="User display name"
+    )
+
+    class Meta:
+        verbose_name = "Todoist User"
+        verbose_name_plural = "Todoist Users"
+
+    def __str__(self):
+        return f"{self.full_name} ({self.email})"
+
+
 class Task(models.Model):
     """Represents a task synced with an external service (e.g. Todoist).
 
@@ -170,6 +189,21 @@ class Task(models.Model):
     tags = TaggableManager(blank=True, help_text="Tags for this task")
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Datetime the task was completed in Todoist",
+    )
+
+    completed_by = models.ForeignKey(
+        "TodoistUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="completed_tasks",
+        help_text="User who completed the task (from webhook initiator)",
+    )
 
     hide = models.BooleanField(
         default=True,
