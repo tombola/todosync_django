@@ -141,6 +141,7 @@ def create_tasks_from_template(
                 default_section_key,
             )
 
+    flat_mode = getattr(settings, "TODOIST_FLAT_MODE", False)
     task_count = 0
 
     if dry_run:
@@ -153,9 +154,11 @@ def create_tasks_from_template(
             logger.debug("Dry run: project ID: %s", project_id)
         parent_todo_id = f"dry_run_{random.randint(1000, 9999)}"
         task_count += 1
-    elif django_only:
+    elif django_only or flat_mode:
         logger.info(
-            "django_only: skipping Todoist creation for parent task '%s'", parent_title
+            "%s: skipping Todoist creation for parent task '%s'",
+            "flat_mode" if flat_mode else "django_only",
+            parent_title,
         )
         parent_todo_id = ""
         task_count += 1
@@ -182,6 +185,7 @@ def create_tasks_from_template(
             dry_run=dry_run,
             template_to_task_map=template_to_task_map,
             django_only=django_only,
+            flat_mode=flat_mode,
         )
 
     logger.info(
@@ -208,6 +212,7 @@ def _create_task_from_template_task(
     dry_run=False,
     template_to_task_map=None,
     django_only=False,
+    flat_mode=False,
 ):
     """Create a Todoist task from a TemplateTask instance.
 
@@ -243,7 +248,21 @@ def _create_task_from_template_task(
     if labels:
         task_params["labels"] = labels
     task_params["due_date"] = template_task.due_date
-    if parent_todo_id:
+    if flat_mode:
+        label_section_map = getattr(settings, "TODOIST_LABEL_SECTION_MAP", {})
+        section_key = next((label_section_map[lbl] for lbl in labels if lbl in label_section_map), None)
+        if section_key is None:
+            section_key = getattr(settings, "TODOIST_DEFAULT_SECTION", None)
+        if section_key and not dry_run and not django_only:
+            try:
+                section = TodoistSection.objects.get(key=section_key)
+                task_params["section_id"] = section.section_id
+            except TodoistSection.DoesNotExist:
+                logger.warning(
+                    "TODOIST_LABEL_SECTION_MAP references unknown section key '%s'",
+                    section_key,
+                )
+    elif parent_todo_id:
         task_params["parent_id"] = parent_todo_id
 
     if template_task.hide:
@@ -461,6 +480,9 @@ def _apply_settings_label_rules(task, item):
     Only fires if item has a parent_id and labels. Resolves the section key
     via TodoistSection and calls api.move_task on the parent Todoist task ID.
     """
+    if not item.parent_id:
+        return
+
     rules = getattr(settings, "TODOIST_LABEL_SECTION_RULES", {})
     if not rules:
         return
