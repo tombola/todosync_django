@@ -130,6 +130,17 @@ def create_tasks_from_template(
     if project_id:
         task_params["project_id"] = project_id
 
+    default_section_key = getattr(settings, "TODOIST_DEFAULT_SECTION", None)
+    if default_section_key and not dry_run and not django_only:
+        try:
+            default_section = TodoistSection.objects.get(key=default_section_key)
+            task_params["section_id"] = default_section.section_id
+        except TodoistSection.DoesNotExist:
+            logger.warning(
+                "TODOIST_DEFAULT_SECTION references unknown section key '%s'",
+                default_section_key,
+            )
+
     task_count = 0
 
     if dry_run:
@@ -360,6 +371,17 @@ def create_todoist_task_for_django_task(
         task_params["project_id"] = resolved_project_id
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
+    else:
+        default_section_key = getattr(settings, "TODOIST_DEFAULT_SECTION", None)
+        if default_section_key:
+            try:
+                default_section = TodoistSection.objects.get(key=default_section_key)
+                task_params["section_id"] = default_section.section_id
+            except TodoistSection.DoesNotExist:
+                logger.warning(
+                    "TODOIST_DEFAULT_SECTION references unknown section key '%s'",
+                    default_section_key,
+                )
 
     if task.hide:
         hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", "2")

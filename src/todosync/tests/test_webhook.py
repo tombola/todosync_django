@@ -309,6 +309,76 @@ def test_django_only_then_push_to_todoist(db, template_with_tasks):
 
 
 @pytest.fixture
+def sowing_section(db):
+    """TodoistSection record for the sowing section."""
+    from todosync.models import TodoistSection
+
+    return TodoistSection.objects.create(
+        key="sowing",
+        section_id="sec_sowing_123",
+        name="Sowing",
+    )
+
+
+def test_create_tasks_uses_default_section(db, template_with_tasks, sowing_section, settings):
+    """Parent task is created in TODOIST_DEFAULT_SECTION when the setting is configured."""
+    from todosync.todoist_api import create_tasks_from_template
+
+    settings.TODOIST_DEFAULT_SECTION = "sowing"
+
+    mock_api = MagicMock()
+    mock_api.add_task.side_effect = [
+        MagicMock(id="todo_parent"),
+        MagicMock(id="todo_child1"),
+        MagicMock(id="todo_child2"),
+    ]
+
+    token_values = {
+        "sku": "TOM-001",
+        "crop": "Tomato",
+        "variety_name": "Roma",
+        "bed": "B1",
+        "seed_source": "supplier",
+        "spacing": "30cm",
+    }
+    create_tasks_from_template(mock_api, template_with_tasks, token_values)
+
+    parent_call_kwargs = mock_api.add_task.call_args_list[0].kwargs
+    assert parent_call_kwargs.get("section_id") == sowing_section.section_id
+    # Child tasks must NOT get section_id (they use parent_id nesting instead)
+    for call in mock_api.add_task.call_args_list[1:]:
+        assert "section_id" not in call.kwargs
+
+
+def test_push_task_uses_default_section(db, template_with_tasks, sowing_section, settings):
+    """create_todoist_task_for_django_task applies TODOIST_DEFAULT_SECTION for parent tasks."""
+    from todosync.todoist_api import create_tasks_from_template, create_todoist_task_for_django_task
+
+    settings.TODOIST_DEFAULT_SECTION = "sowing"
+
+    mock_api = MagicMock()
+    token_values = {
+        "sku": "TOM-001",
+        "crop": "Tomato",
+        "variety_name": "Roma",
+        "bed": "B1",
+        "seed_source": "supplier",
+        "spacing": "30cm",
+    }
+
+    # Create Django records only — no Todoist calls yet
+    result = create_tasks_from_template(mock_api, template_with_tasks, token_values, django_only=True)
+    parent = result["parent_task_instance"]
+
+    # Now push the parent to Todoist
+    mock_api.add_task.return_value = MagicMock(id="todo_parent")
+    create_todoist_task_for_django_task(mock_api, parent)
+
+    call_kwargs = mock_api.add_task.call_args.kwargs
+    assert call_kwargs.get("section_id") == sowing_section.section_id
+
+
+@pytest.fixture
 def propagation_section(db):
     """TodoistSection record for the propagation section."""
     from todosync.models import TodoistSection

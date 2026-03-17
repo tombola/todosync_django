@@ -57,6 +57,11 @@ DEBUG_TASK_CREATION = os.getenv('DEBUG_TASK_CREATION', 'False').lower() in ('tru
 # This is your Todoist app's client secret, used to verify incoming webhook requests.
 # If not set, signature verification is skipped.
 TODOIST_WEBHOOK_SECRET = os.getenv('TODOIST_WEBHOOK_SECRET', '')
+
+# Optional: Default section for newly created parent tasks (TodoistSection.key slug).
+# If set, the parent task is placed in this section when a task group is created.
+# Requires a matching TodoistSection record (sync with: manage.py sync_todoist_sections).
+TODOIST_DEFAULT_SECTION = 'sowing'
 ```
 
 ### 2. Include URLs
