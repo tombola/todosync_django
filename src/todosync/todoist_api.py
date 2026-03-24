@@ -130,18 +130,13 @@ def create_tasks_from_template(
     if project_id:
         task_params["project_id"] = project_id
 
-    default_section_key = getattr(settings, "TODOIST_DEFAULT_SECTION", None)
-    if default_section_key and not dry_run and not django_only:
-        try:
-            default_section = TodoistSection.objects.get(key=default_section_key)
-            task_params["section_id"] = default_section.section_id
-        except TodoistSection.DoesNotExist:
-            logger.warning(
-                "TODOIST_DEFAULT_SECTION references unknown section key '%s'",
-                default_section_key,
-            )
-
     task_count = 0
+    flat_mode = getattr(settings, "TODOIST_FLAT_MODE", False)
+
+    if not dry_run and not django_only and not flat_mode:
+        section_id = _resolve_section_id()
+        if section_id:
+            task_params["section_id"] = section_id
 
     if dry_run:
         import random
@@ -153,9 +148,11 @@ def create_tasks_from_template(
             logger.debug("Dry run: project ID: %s", project_id)
         parent_todo_id = f"dry_run_{random.randint(1000, 9999)}"
         task_count += 1
-    elif django_only:
+    elif django_only or flat_mode:
         logger.info(
-            "django_only: skipping Todoist creation for parent task '%s'", parent_title
+            "%s: skipping Todoist creation for parent task '%s'",
+            "flat_mode" if flat_mode else "django_only",
+            parent_title,
         )
         parent_todo_id = ""
         task_count += 1
@@ -245,6 +242,10 @@ def _create_task_from_template_task(
     task_params["due_date"] = template_task.due_date
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
+    elif not dry_run and not django_only:
+        section_id = _resolve_section_id(labels)
+        if section_id:
+            task_params["section_id"] = section_id
 
     if template_task.hide:
         hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", None)
@@ -329,6 +330,37 @@ def _get_task_type_label(task):
     return None
 
 
+def _resolve_section_id(labels=None):
+    """Return a Todoist section_id for a top-level task, or None.
+
+    Checks TODOIST_LABEL_SECTION_MAP (label → TodoistSection.key) first,
+    then falls back to TODOIST_DEFAULT_SECTION.
+    """
+    label_section_map = getattr(settings, "TODOIST_LABEL_SECTION_MAP", {})
+    for label in (labels or []):
+        section_key = label_section_map.get(label)
+        if section_key:
+            try:
+                return TodoistSection.objects.get(key=section_key).section_id
+            except TodoistSection.DoesNotExist:
+                logger.warning(
+                    "TODOIST_LABEL_SECTION_MAP references unknown section key '%s'",
+                    section_key,
+                )
+            break  # stop after first map hit (found or warned)
+
+    default_section_key = getattr(settings, "TODOIST_DEFAULT_SECTION", None)
+    if default_section_key:
+        try:
+            return TodoistSection.objects.get(key=default_section_key).section_id
+        except TodoistSection.DoesNotExist:
+            logger.warning(
+                "TODOIST_DEFAULT_SECTION references unknown section key '%s'",
+                default_section_key,
+            )
+    return None
+
+
 def create_todoist_task_for_django_task(
     api, task, project_id=None, parent_todo_id=None
 ):
@@ -372,16 +404,9 @@ def create_todoist_task_for_django_task(
     if parent_todo_id:
         task_params["parent_id"] = parent_todo_id
     else:
-        default_section_key = getattr(settings, "TODOIST_DEFAULT_SECTION", None)
-        if default_section_key:
-            try:
-                default_section = TodoistSection.objects.get(key=default_section_key)
-                task_params["section_id"] = default_section.section_id
-            except TodoistSection.DoesNotExist:
-                logger.warning(
-                    "TODOIST_DEFAULT_SECTION references unknown section key '%s'",
-                    default_section_key,
-                )
+        section_id = _resolve_section_id(list(task.tags.names()))
+        if section_id:
+            task_params["section_id"] = section_id
 
     if task.hide:
         hide_priority = getattr(settings, "TODOIST_HIDE_PRIORITY", "2")
