@@ -50,6 +50,55 @@ def get_api_client():
     return TodoistAPI(api_token)
 
 
+def get_todoist_tasks_for_django_tasks(api, completed=None):
+    """Return Todoist Task objects whose todo_id matches a Django Task record.
+
+    Args:
+        api: TodoistAPI instance
+        completed: None = all Django todo_ids, 0 = only where Task.completed=False,
+                   1 = only where Task.completed=True
+
+    Returns:
+        list of todoist_api_python Task objects
+    """
+    from datetime import datetime, timedelta, timezone
+
+    qs = Task.objects.exclude(todo_id="")
+    if completed == 0:
+        qs = qs.filter(completed=False)
+    elif completed == 1:
+        qs = qs.filter(completed=True)
+    django_todo_ids = set(qs.values_list("todo_id", flat=True))
+
+    if not django_todo_ids:
+        return []
+
+    results = []
+
+    if completed in (0, None):
+        id_list = list(django_todo_ids)
+        for i in range(0, len(id_list), 200):
+            chunk = id_list[i : i + 200]
+            for attempt in stamina.retry_context(on=_is_retryable_request_error):
+                with attempt:
+                    for page in api.get_tasks(ids=chunk):
+                        items = page if isinstance(page, list) else [page]
+                        results.extend(t for t in items if t.id in django_todo_ids)
+
+    if completed in (1, None):
+        until = datetime.now(tz=timezone.utc)
+        since = until - timedelta(days=90)
+        for attempt in stamina.retry_context(on=_is_retryable_request_error):
+            with attempt:
+                for page in api.get_completed_tasks_by_completion_date(
+                    since=since, until=until
+                ):
+                    items = page if isinstance(page, list) else [page]
+                    results.extend(t for t in items if t.id in django_todo_ids)
+
+    return results
+
+
 def _add_todoist_task(api, task_params, label):
     """Call api.add_task with retry/error handling. Returns the created task's id."""
     try:
@@ -337,7 +386,7 @@ def _resolve_section_id(labels=None):
     then falls back to TODOIST_DEFAULT_SECTION.
     """
     label_section_map = getattr(settings, "TODOIST_LABEL_SECTION_MAP", {})
-    for label in (labels or []):
+    for label in labels or []:
         section_key = label_section_map.get(label)
         if section_key:
             try:
