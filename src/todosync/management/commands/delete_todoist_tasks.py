@@ -41,7 +41,11 @@ def command(dry_run, task_id, todo_id, hidden):
         )
         raise click.Abort()
 
-    tasks = Task.objects.exclude(todo_id="").exclude(templatetask__isnull=False).exclude(user_created=True)
+    tasks = (
+        Task.objects.exclude(todo_id="")
+        .exclude(templatetask__isnull=False)
+        .exclude(user_created=True)
+    )
     if hidden:
         tasks = tasks.filter(hide__gt=0)
     if task_id:
@@ -51,7 +55,7 @@ def command(dry_run, task_id, todo_id, hidden):
     count = tasks.count()
 
     if count == 0:
-        console.print("[yellow]No tasks with a todo_id found.[/yellow]")
+        console.print("[yellow]No unprotected tasks with a todo_id found.[/yellow]")
         return
 
     console.print(f"Found [bold]{count}[/bold] task(s) with a todo_id.")
