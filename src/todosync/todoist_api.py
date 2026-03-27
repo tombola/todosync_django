@@ -123,6 +123,28 @@ def update_todoist_tracking_label(api, todo_id, current_labels):
             api.update_task(todo_id, labels=new_labels)
 
 
+def add_todoist_comment(api, todo_id, content):
+    """Post a comment on a Todoist task.
+
+    Args:
+        api: TodoistAPI instance
+        todo_id: Todoist task ID string
+        content: Comment text
+
+    Returns:
+        The created comment object, or None on failure.
+    """
+    try:
+        for attempt in stamina.retry_context(on=_is_retryable_request_error):
+            with attempt:
+                comment = api.add_comment(task_id=todo_id, content=content)
+        logger.info("Added comment to Todoist task %s", todo_id)
+        return comment
+    except Exception:
+        logger.exception("Failed to add comment to Todoist task %s", todo_id)
+        raise
+
+
 def _add_todoist_task(api, task_params, label):
     """Call api.add_task with retry/error handling. Returns the created task's id."""
     try:
