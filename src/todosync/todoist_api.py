@@ -99,6 +99,30 @@ def get_todoist_tasks_for_django_tasks(api, completed=None):
     return results
 
 
+def _apply_tracking_label(task_params):
+    """Add TODOIST_TRACKING_LABEL to task_params['labels'] if configured."""
+    tracking_label = getattr(settings, "TODOIST_TRACKING_LABEL", None)
+    if tracking_label:
+        task_params.setdefault("labels", [])
+        if tracking_label not in task_params["labels"]:
+            task_params["labels"].append(tracking_label)
+
+
+def update_todoist_tracking_label(api, todo_id, current_labels):
+    """Add TODOIST_TRACKING_LABEL to an existing Todoist task if not already present.
+
+    Used when linking an existing Todoist task to a Django record (rather than
+    creating a new one), so the task gets the tracking label retroactively.
+    """
+    tracking_label = getattr(settings, "TODOIST_TRACKING_LABEL", None)
+    if not tracking_label or tracking_label in current_labels:
+        return
+    new_labels = list(current_labels) + [tracking_label]
+    for attempt in stamina.retry_context(on=_is_retryable_request_error):
+        with attempt:
+            api.update_task(todo_id, labels=new_labels)
+
+
 def _add_todoist_task(api, task_params, label):
     """Call api.add_task with retry/error handling. Returns the created task's id."""
     try:
@@ -206,6 +230,7 @@ def create_tasks_from_template(
         parent_todo_id = ""
         task_count += 1
     else:
+        _apply_tracking_label(task_params)
         parent_todo_id = _add_todoist_task(api, task_params, f"parent '{parent_title}'")
         task_count += 1
 
@@ -325,6 +350,7 @@ def _create_task_from_template_task(
         logger.info("django_only: skipping Todoist creation for task '%s'", title)
         created_todo_id = ""
     else:
+        _apply_tracking_label(task_params)
         created_todo_id = _add_todoist_task(
             api, task_params, f"child '{title}' (parent={parent_todo_id})"
         )
@@ -466,6 +492,7 @@ def create_todoist_task_for_django_task(
             if hide_label not in task_params["labels"]:
                 task_params["labels"].append(hide_label)
 
+    _apply_tracking_label(task_params)
     todo_id = _add_todoist_task(api, task_params, task.title)
     task.todo_id = todo_id
     task.save()
