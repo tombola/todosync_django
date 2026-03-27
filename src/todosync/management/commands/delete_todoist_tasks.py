@@ -41,7 +41,7 @@ def command(dry_run, task_id, todo_id, hidden):
         )
         raise click.Abort()
 
-    tasks = Task.objects.exclude(todo_id="").exclude(templatetask__isnull=False)
+    tasks = Task.objects.exclude(todo_id="").exclude(templatetask__isnull=False).exclude(user_created=True)
     if hidden:
         tasks = tasks.filter(hide__gt=0)
     if task_id:

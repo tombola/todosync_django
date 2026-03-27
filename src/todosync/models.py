@@ -210,6 +210,11 @@ class Task(models.Model):
         help_text="If True, this task will be hidden in the external service until relevant",
     )
 
+    user_created = models.BooleanField(
+        default=False,
+        help_text="True if this task was created directly by a user in Todoist (not by taskplanner)",
+    )
+
     class Meta:
         verbose_name = "Task"
         verbose_name_plural = "Tasks"
