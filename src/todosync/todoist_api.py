@@ -660,7 +660,12 @@ def todoist_webhook(request):
         task.completed = True
         update_fields.append("completed")
 
-        if event == WebhookEventType.ITEM_COMPLETED:
+        if event == WebhookEventType.ITEM_DELETED:
+            if task.todo_id:
+                task.todo_id = ""
+                update_fields.append("todo_id")
+
+        elif event == WebhookEventType.ITEM_COMPLETED:
             if item.completed_at is not None:
                 task.completed_at = item.completed_at
                 update_fields.append("completed_at")
@@ -717,6 +722,8 @@ def todoist_webhook(request):
 
     if event in _WEBHOOK_ACTION_NAMES:
         action_log.info("todoist: %s %s", _WEBHOOK_ACTION_NAMES[event], task.pk)
+        if event == WebhookEventType.ITEM_DELETED and "todo_id" in update_fields:
+            action_log.info("django: clear_todo_id %s", task.pk)
     elif (
         event in (WebhookEventType.ITEM_UPDATED, WebhookEventType.ITEM_ADDED)
         and update_fields

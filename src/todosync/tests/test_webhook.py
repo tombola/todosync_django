@@ -122,6 +122,7 @@ def test_item_deleted(client, tracked_task):
     assert response.status_code == 200
     tracked_task.refresh_from_db()
     assert tracked_task.completed is True
+    assert tracked_task.todo_id == ""
 
 
 # -- item:updated --
