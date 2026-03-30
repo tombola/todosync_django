@@ -84,7 +84,7 @@ class TaskAdmin(admin.ModelAdmin):
         "parent_task",
         "template_task",
         "depends_on",
-        "todo_id",
+        # "todo_id",
         "title",
         "created_at",
         "completed_at",
