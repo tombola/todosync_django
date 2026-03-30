@@ -187,6 +187,15 @@ Shows all Todoist sections with their IDs. Optionally filter by project ID.
 
 ## Models
 
+### Task
+
+`completed_by` (FK to `TodoistUser`) is resolved in this order when an `item:completed` webhook event arrives:
+
+1. `responsible_uid` from the event payload (the assignee) — looked up by Todoist ID; must already exist in `TodoistUser`
+2. `initiator` from the webhook payload — created/updated automatically from the event data
+
+The `sync_completed_tasks` management command uses the same priority (assignee first).
+
 ### TaskSyncSettings
 
 Site-wide configuration for task creation:

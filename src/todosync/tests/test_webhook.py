@@ -478,6 +478,25 @@ def test_item_completed_no_initiator(client, tracked_task):
     assert tracked_task.completed_by is None
 
 
+def test_item_completed_prefers_responsible_uid(client, tracked_task):
+    """responsible_uid (assignee) takes priority over initiator for completed_by."""
+    from todosync.models import TodoistUser
+
+    assignee = TodoistUser.objects.create(
+        todoist_id="9999999", email="bob@example.com", full_name="Bob"
+    )
+    fixture = json.loads(_load_fixture("item_completed.json"))
+    fixture["event_data"]["responsible_uid"] = "9999999"
+    body = json.dumps(fixture).encode()
+
+    response = client.post(WEBHOOK_URL, data=body, content_type="application/json")
+
+    assert response.status_code == 200
+    tracked_task.refresh_from_db()
+    assert tracked_task.completed_by == assignee
+    assert tracked_task.completed_by.email == "bob@example.com"
+
+
 def test_fire_rule_callbacks_called_on_completion(client, tracked_task, monkeypatch):
     """fire_rule_callbacks is called when item:completed fires."""
     import todosync.registry as reg

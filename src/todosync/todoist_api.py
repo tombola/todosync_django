@@ -670,15 +670,21 @@ def todoist_webhook(request):
                 task.completed_at = item.completed_at
                 update_fields.append("completed_at")
 
-            if payload.initiator is not None:
-                user, _ = TodoistUser.objects.update_or_create(
+            completed_by_user = None
+            if item.responsible_uid:
+                completed_by_user = TodoistUser.objects.filter(
+                    todoist_id=item.responsible_uid
+                ).first()
+            if completed_by_user is None and payload.initiator is not None:
+                completed_by_user, _ = TodoistUser.objects.update_or_create(
                     todoist_id=payload.initiator.id,
                     defaults={
                         "email": payload.initiator.email,
                         "full_name": payload.initiator.full_name,
                     },
                 )
-                task.completed_by = user
+            if completed_by_user is not None:
+                task.completed_by = completed_by_user
                 update_fields.append("completed_by")
 
             if item.labels:
