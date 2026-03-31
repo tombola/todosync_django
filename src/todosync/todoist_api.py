@@ -656,6 +656,10 @@ def todoist_webhook(request):
         )
         if event == WebhookEventType.ITEM_COMPLETED:
             action_log.info("todoist: completed_task %s user_task", item.content)
+        if event == WebhookEventType.ITEM_ADDED:
+            from .registry import fire_shorthand_callbacks
+
+            fire_shorthand_callbacks(item)
         return HttpResponse(status=200)
 
     update_fields = []
