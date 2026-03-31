@@ -61,7 +61,7 @@ def test_rejects_invalid_json(client):
 def test_rejects_unknown_event_type(client):
     payload = json.dumps(
         {
-            "event_name": "note:added",
+            "event_name": "foo:bar",
             "event_data": {"id": "x", "content": "x"},
         }
     )
@@ -71,6 +71,21 @@ def test_rejects_unknown_event_type(client):
         content_type="application/json",
     )
     assert response.status_code == 400
+
+
+def test_note_added_returns_200(client):
+    payload = json.dumps(
+        {
+            "event_name": "note:added",
+            "event_data": {"id": "NOTE1", "content": "A note", "item_id": "ABC123"},
+        }
+    )
+    response = client.post(
+        WEBHOOK_URL,
+        data=payload,
+        content_type="application/json",
+    )
+    assert response.status_code == 200
 
 
 # -- untracked task --

@@ -641,6 +641,10 @@ def todoist_webhook(request):
     event = payload.event_name
     logger.info("Webhook received: %s for item '%s' (%s)", event, item.content, item.id)
 
+    if event == WebhookEventType.NOTE_ADDED:
+        logger.info("Webhook note:added ignored (note %s)", item.id)
+        return HttpResponse(status=200)
+
     try:
         task = Task.objects.get(todo_id=item.id)
     except Task.DoesNotExist:

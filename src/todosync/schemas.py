@@ -15,6 +15,7 @@ class WebhookEventType(StrEnum):
     ITEM_DELETED = "item:deleted"
     ITEM_COMPLETED = "item:completed"
     ITEM_UNCOMPLETED = "item:uncompleted"
+    NOTE_ADDED = "note:added"
 
 
 class Duration(BaseModel):
@@ -30,6 +31,17 @@ class Due(BaseModel):
     lang: str = "en"
     is_recurring: bool = False
     timezone: str | None = None
+
+
+class TodoistNote(BaseModel):
+    """Todoist comment/note object from note:added webhook event_data."""
+
+    id: str
+    content: str
+    item_id: str | None = None
+    project_id: str | None = None
+    posted_uid: str | None = None
+    posted_at: datetime | None = None
 
 
 class TodoistItem(BaseModel):
