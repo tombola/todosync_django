@@ -88,6 +88,26 @@ def test_note_added_returns_200(client):
     assert response.status_code == 200
 
 
+def test_note_added_fires_note_callbacks(client, db):
+    """note:added parses event_data as TodoistNote and fires note callbacks."""
+    from unittest.mock import patch
+
+    with patch("todosync.todoist_api.fire_note_callbacks") as mock_fire:
+        payload = json.dumps(
+            {
+                "event_name": "note:added",
+                "event_data": {"id": "NOTE1", "content": "link TOM-001", "item_id": "ITEM99"},
+            }
+        )
+        response = client.post(WEBHOOK_URL, data=payload, content_type="application/json")
+
+    assert response.status_code == 200
+    mock_fire.assert_called_once()
+    note = mock_fire.call_args[0][0]
+    assert note.item_id == "ITEM99"
+    assert note.content == "link TOM-001"
+
+
 # -- untracked task --
 
 

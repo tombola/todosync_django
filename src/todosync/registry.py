@@ -6,6 +6,7 @@ Callbacks are called by fire_rule_callbacks() in todoist_api.py.
 
 _rule_callbacks = []
 _shorthand_callbacks = []
+_note_callbacks = []
 
 
 def register_rule_callback(fn):
@@ -28,6 +29,37 @@ def register_shorthand_callback(fn):
       item - todosync.schemas.TodoistItem instance (webhook payload item)
     """
     _shorthand_callbacks.append(fn)
+
+
+def register_note_callback(fn):
+    """Register a callable for note:added webhook events.
+
+    The callable will be called as: fn(note)
+    where:
+      note - todosync.schemas.TodoistNote instance (webhook payload note)
+    """
+    _note_callbacks.append(fn)
+
+
+def fire_note_callbacks(note):
+    """Call all registered note callbacks with the given note.
+
+    Exceptions from individual callbacks are caught and logged so one
+    bad callback does not prevent others from running.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    for fn in _note_callbacks:
+        try:
+            fn(note)
+        except Exception:
+            logger.exception(
+                "Note callback %r raised an exception (note_id=%s)",
+                fn,
+                getattr(note, "id", None),
+            )
 
 
 def fire_shorthand_callbacks(item):

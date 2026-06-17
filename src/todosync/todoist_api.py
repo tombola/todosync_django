@@ -7,6 +7,7 @@ different task-management backend, this module is what gets replaced.
 import base64
 import hashlib
 import hmac
+import json
 import logging
 from datetime import date
 
@@ -20,8 +21,8 @@ from pydantic import ValidationError
 from todoist_api_python.api import TodoistAPI
 
 from .models import Task, TodoistSection, TodoistUser
-from .registry import fire_rule_callbacks
-from .schemas import TodoistWebhookPayload, WebhookEventType
+from .registry import fire_note_callbacks, fire_rule_callbacks
+from .schemas import TodoistNote, TodoistWebhookPayload, WebhookEventType
 from .utils import substitute_tokens
 
 logger = logging.getLogger(__name__)
@@ -642,7 +643,13 @@ def todoist_webhook(request):
     logger.info("Webhook received: %s for item '%s' (%s)", event, item.content, item.id)
 
     if event == WebhookEventType.NOTE_ADDED:
-        logger.info("Webhook note:added ignored (note %s)", item.id)
+        raw = json.loads(request.body)
+        try:
+            note = TodoistNote.model_validate(raw["event_data"])
+        except (KeyError, ValidationError):
+            logger.exception("note:added: could not parse event_data as TodoistNote")
+            return HttpResponse(status=200)
+        fire_note_callbacks(note)
         return HttpResponse(status=200)
 
     try:
