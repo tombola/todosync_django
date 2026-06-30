@@ -671,40 +671,39 @@ def todoist_webhook(request):
 
     update_fields = []
 
-    if event in (WebhookEventType.ITEM_COMPLETED, WebhookEventType.ITEM_DELETED):
+    if event == WebhookEventType.ITEM_DELETED:
+        if task.todo_id:
+            task.todo_id = ""
+            update_fields.append("todo_id")
+
+    elif event == WebhookEventType.ITEM_COMPLETED:
         task.completed = True
         update_fields.append("completed")
 
-        if event == WebhookEventType.ITEM_DELETED:
-            if task.todo_id:
-                task.todo_id = ""
-                update_fields.append("todo_id")
+        if item.completed_at is not None:
+            task.completed_at = item.completed_at
+            update_fields.append("completed_at")
 
-        elif event == WebhookEventType.ITEM_COMPLETED:
-            if item.completed_at is not None:
-                task.completed_at = item.completed_at
-                update_fields.append("completed_at")
+        completed_by_user = None
+        if item.responsible_uid:
+            completed_by_user = TodoistUser.objects.filter(
+                todoist_id=item.responsible_uid
+            ).first()
+        if completed_by_user is None and payload.initiator is not None:
+            completed_by_user, _ = TodoistUser.objects.update_or_create(
+                todoist_id=payload.initiator.id,
+                defaults={
+                    "email": payload.initiator.email,
+                    "full_name": payload.initiator.full_name,
+                },
+            )
+        if completed_by_user is not None:
+            task.completed_by = completed_by_user
+            update_fields.append("completed_by")
 
-            completed_by_user = None
-            if item.responsible_uid:
-                completed_by_user = TodoistUser.objects.filter(
-                    todoist_id=item.responsible_uid
-                ).first()
-            if completed_by_user is None and payload.initiator is not None:
-                completed_by_user, _ = TodoistUser.objects.update_or_create(
-                    todoist_id=payload.initiator.id,
-                    defaults={
-                        "email": payload.initiator.email,
-                        "full_name": payload.initiator.full_name,
-                    },
-                )
-            if completed_by_user is not None:
-                task.completed_by = completed_by_user
-                update_fields.append("completed_by")
-
-            if item.labels:
-                _apply_settings_label_rules(task, item)
-            fire_rule_callbacks("completed_task", task, item)
+        if item.labels:
+            _apply_settings_label_rules(task, item)
+        fire_rule_callbacks("completed_task", task, item)
 
     elif event == WebhookEventType.ITEM_UNCOMPLETED:
         task.completed = False
