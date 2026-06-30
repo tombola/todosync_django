@@ -53,13 +53,21 @@ class TaskInline(admin.TabularInline):
 
 @admin.register(BaseParentTask)
 class BaseParentTaskAdmin(admin.ModelAdmin):
-    list_display = ["__str__", "template", "todo_id", "created_at"]
+    list_display = ["__str__", "get_sku", "get_variety_name", "template", "todo_id", "created_at"]
     list_filter = ["created_at"]
     readonly_fields = ["template", "todo_id", "created_at"]
     inlines = [TaskInline]
 
     def has_add_permission(self, request):
         return False
+
+    @admin.display(description="SKU")
+    def get_sku(self, obj):
+        return getattr(obj, "sku", None)
+
+    @admin.display(description="Variety")
+    def get_variety_name(self, obj):
+        return getattr(obj, "variety_name", None)
 
 
 @admin.register(TodoistSection)
